@@ -1,10 +1,12 @@
 # PROGRESS.md
 
-最后更新：2026-03-30
+最后更新：2026-04-01
 
 ## 当前状态
 
-项目已从空白 Rust 工程搭成可编译的后端骨架，当前可通过 `cargo check`。
+项目已从空白 Rust 工程搭成可编译的后端骨架，并已补上首批 SeaORM migration。
+
+当前数据库初始化已改为应用启动时直接执行 migration，不再保留单独的启动期建表封装；当前可通过 `cargo check`。
 
 ## 已完成
 
@@ -27,9 +29,11 @@
   - `GET /api/v1/checkins`
   - `GET /health`
 - 为未实现模块保留了占位路由，统一返回未实现错误。
-- 启动时会自动初始化当前已落地的核心表：
+- 已接入 SeaORM migration，启动时会自动执行迁移，初始化当前已落地的核心表：
   - `user`
   - `user_checkin`
+- 当前 migration 采用早期开发阶段的顺序编号风格，首个 migration 为 `m0001_init_schema.rs`。
+- 已移除无实际独立价值的 `bootstrap.rs` 过渡层，启动入口直接执行 migration。
 
 ## 当前签到规则实现
 
@@ -73,11 +77,11 @@
 - 学习任务相关实体与接口
 - 题目与前测相关实体与接口
 - 内容生成与公共内容相关实体与接口
-- 更完整的数据库 schema 与 migration 方案
+- 更多业务表结构与后续 schema 演进
 - 更系统的测试
 
 ## 下一步建议
 
-1. 先补齐 SeaORM migration，把当前已实现表结构稳定下来。
-2. 按资源领域继续落地 `study_plans / study_stages / study_tasks / problems`。
-3. 为签到与认证增加基础集成测试。
+1. 为认证与签到补基础集成测试，先锁住现有最小闭环。
+2. 按资源领域优先落地 `study_plans`，再逐步展开 `study_stages / study_tasks / problems`。
+3. 在新增业务资源时同步补对应 migration；在仍可删库重建的阶段内，优先维护初始化 migration 的清晰度，不急于堆积历史迁移。

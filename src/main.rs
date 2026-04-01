@@ -1,8 +1,8 @@
 mod auth;
-mod bootstrap;
 mod config;
 mod entities;
 mod error;
+mod migration;
 mod response;
 mod routes;
 mod services;
@@ -11,11 +11,12 @@ mod state;
 use std::net::SocketAddr;
 
 use sea_orm::Database;
+use sea_orm_migration::MigratorTrait;
 use tokio::net::TcpListener;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{bootstrap::bootstrap_database, config::Config, routes::build_router, state::AppState};
+use crate::{config::Config, migration::Migrator, routes::build_router, state::AppState};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::from_env()?;
     let database = Database::connect(&config.database_url).await?;
-    bootstrap_database(&database).await?;
+    Migrator::up(&database, None).await?;
     let state = AppState::new(config.clone(), database);
 
     let app = build_router(state);
