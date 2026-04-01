@@ -1,22 +1,10 @@
-mod auth;
-mod config;
-mod entities;
-mod error;
-mod migration;
-mod response;
-mod routes;
-mod services;
-mod state;
-
 use std::net::SocketAddr;
 
-use sea_orm::Database;
-use sea_orm_migration::MigratorTrait;
 use tokio::net::TcpListener;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{config::Config, migration::Migrator, routes::build_router, state::AppState};
+use zhiying_backend::{build_app, config::Config};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,11 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing();
 
     let config = Config::from_env()?;
-    let database = Database::connect(&config.database_url).await?;
-    Migrator::up(&database, None).await?;
-    let state = AppState::new(config.clone(), database);
-
-    let app = build_router(state);
+    let app = build_app(config.clone()).await?;
     let addr = SocketAddr::new(config.host, config.port);
     let listener = TcpListener::bind(addr).await?;
 

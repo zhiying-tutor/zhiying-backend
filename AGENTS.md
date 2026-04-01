@@ -32,9 +32,10 @@
 - `src/routes/`：按资源领域拆分的 HTTP handler 与路由。
 - `src/entities/`：SeaORM entity 定义。
 - `src/services/`：不直接依赖 HTTP 协议的业务逻辑或通用逻辑。
+- `src/migration/`：SeaORM migration 定义。
 - `src/config.rs`：环境变量配置解析。
 - `src/error.rs`：统一错误码、错误响应与错误映射。
-- `src/bootstrap.rs`：启动期数据库初始化。
+- `src/main.rs`：应用启动入口，启动时直接执行 migration。
 
 ## 路由约定
 
