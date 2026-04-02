@@ -13,6 +13,24 @@ pub struct Config {
     pub checkin_reward_sequence: Vec<i32>,
     pub checkin_makeup_gold_cost_per_day: i32,
     pub checkin_makeup_diamond_cost: i32,
+
+    // Content generation costs
+    pub knowledge_video_diamond_cost: i32,
+    pub code_video_diamond_cost: i32,
+    pub interactive_html_gold_cost: i32,
+    pub knowledge_explanation_gold_cost: i32,
+
+    // Microservice URLs
+    pub knowledge_video_service_url: String,
+    pub code_video_service_url: String,
+    pub interactive_html_service_url: String,
+    pub knowledge_explanation_service_url: String,
+
+    // Microservice API keys
+    pub knowledge_video_api_key: String,
+    pub code_video_api_key: String,
+    pub interactive_html_api_key: String,
+    pub knowledge_explanation_api_key: String,
 }
 
 impl Config {
@@ -64,6 +82,44 @@ impl Config {
             .parse()
             .map_err(|_| AppError::internal("CHECKIN_MAKEUP_DIAMOND_COST is invalid"))?;
 
+        let knowledge_video_diamond_cost = env::var("KNOWLEDGE_VIDEO_DIAMOND_COST")
+            .unwrap_or_else(|_| "5".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("KNOWLEDGE_VIDEO_DIAMOND_COST is invalid"))?;
+
+        let code_video_diamond_cost = env::var("CODE_VIDEO_DIAMOND_COST")
+            .unwrap_or_else(|_| "5".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("CODE_VIDEO_DIAMOND_COST is invalid"))?;
+
+        let interactive_html_gold_cost = env::var("INTERACTIVE_HTML_GOLD_COST")
+            .unwrap_or_else(|_| "10".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("INTERACTIVE_HTML_GOLD_COST is invalid"))?;
+
+        let knowledge_explanation_gold_cost = env::var("KNOWLEDGE_EXPLANATION_GOLD_COST")
+            .unwrap_or_else(|_| "10".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("KNOWLEDGE_EXPLANATION_GOLD_COST is invalid"))?;
+
+        let knowledge_video_service_url = env::var("KNOWLEDGE_VIDEO_SERVICE_URL")
+            .unwrap_or_else(|_| "http://localhost:8001".to_owned());
+        let code_video_service_url = env::var("CODE_VIDEO_SERVICE_URL")
+            .unwrap_or_else(|_| "http://localhost:8002".to_owned());
+        let interactive_html_service_url = env::var("INTERACTIVE_HTML_SERVICE_URL")
+            .unwrap_or_else(|_| "http://localhost:8003".to_owned());
+        let knowledge_explanation_service_url = env::var("KNOWLEDGE_EXPLANATION_SERVICE_URL")
+            .unwrap_or_else(|_| "http://localhost:8004".to_owned());
+
+        let knowledge_video_api_key = env::var("KNOWLEDGE_VIDEO_API_KEY")
+            .unwrap_or_else(|_| "sk-knowledge-video-dev".to_owned());
+        let code_video_api_key =
+            env::var("CODE_VIDEO_API_KEY").unwrap_or_else(|_| "sk-code-video-dev".to_owned());
+        let interactive_html_api_key = env::var("INTERACTIVE_HTML_API_KEY")
+            .unwrap_or_else(|_| "sk-interactive-html-dev".to_owned());
+        let knowledge_explanation_api_key = env::var("KNOWLEDGE_EXPLANATION_API_KEY")
+            .unwrap_or_else(|_| "sk-knowledge-explanation-dev".to_owned());
+
         Ok(Self {
             host,
             port,
@@ -74,6 +130,18 @@ impl Config {
             checkin_reward_sequence,
             checkin_makeup_gold_cost_per_day,
             checkin_makeup_diamond_cost,
+            knowledge_video_diamond_cost,
+            code_video_diamond_cost,
+            interactive_html_gold_cost,
+            knowledge_explanation_gold_cost,
+            knowledge_video_service_url,
+            code_video_service_url,
+            interactive_html_service_url,
+            knowledge_explanation_service_url,
+            knowledge_video_api_key,
+            code_video_api_key,
+            interactive_html_api_key,
+            knowledge_explanation_api_key,
         })
     }
 }

@@ -1,4 +1,9 @@
 mod checkins;
+mod code_videos;
+mod interactive_htmls;
+mod internal;
+mod knowledge_explanations;
+mod knowledge_videos;
 mod me;
 mod placeholders;
 mod tokens;
@@ -50,6 +55,36 @@ fn api_router() -> Router<AppState> {
             "/checkins",
             axum::routing::post(checkins::check_in).get(checkins::list_checkins),
         )
+        .route(
+            "/knowledge-videos",
+            axum::routing::post(knowledge_videos::create),
+        )
+        .route(
+            "/knowledge-videos/{id}",
+            get(knowledge_videos::get_by_id).patch(knowledge_videos::update),
+        )
+        .route("/code-videos", axum::routing::post(code_videos::create))
+        .route(
+            "/code-videos/{id}",
+            get(code_videos::get_by_id).patch(code_videos::update),
+        )
+        .route(
+            "/interactive-htmls",
+            axum::routing::post(interactive_htmls::create),
+        )
+        .route(
+            "/interactive-htmls/{id}",
+            get(interactive_htmls::get_by_id).patch(interactive_htmls::update),
+        )
+        .route(
+            "/knowledge-explanations",
+            axum::routing::post(knowledge_explanations::create),
+        )
+        .route(
+            "/knowledge-explanations/{id}",
+            get(knowledge_explanations::get_by_id).patch(knowledge_explanations::update),
+        )
+        .nest("/internal", internal::router())
         .merge(placeholders::router())
 }
 

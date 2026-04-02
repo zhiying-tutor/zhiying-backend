@@ -29,12 +29,6 @@ pub fn router() -> Router<AppState> {
             "/study-plans/{plan_id}/pretest/{pretest_id}/submit",
             post(not_implemented),
         )
-        .route("/knowledge-videos", post(not_implemented))
-        .route("/knowledge-videos/{id}", get(not_implemented))
-        .route("/code-videos", post(not_implemented))
-        .route("/interactive-htmls", post(not_implemented))
-        .route("/knowledge-explanations", post(not_implemented))
-        .route("/knowledge-explanations/{id}", get(not_implemented))
         .route("/my-contents", get(not_implemented))
         .route("/public-contents", get(not_implemented))
 }

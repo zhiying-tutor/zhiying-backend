@@ -16,12 +16,16 @@ pub enum BusinessError {
     MissingAuthorizationHeader,
     InvalidAuthorizationHeader,
     InvalidOrExpiredToken,
+    InvalidApiKey,
     UsernameAlreadyExists,
     InvalidCredentials,
     UserNotFound,
+    ContentNotFound,
+    InvalidContentStatus,
     AlreadyCheckedInToday,
     InsufficientGold,
     InsufficientDiamonds,
+    ServiceUnavailable,
     FeatureNotImplemented,
 }
 
@@ -31,12 +35,16 @@ impl BusinessError {
             Self::MissingAuthorizationHeader => "MISSING_AUTHORIZATION_HEADER",
             Self::InvalidAuthorizationHeader => "INVALID_AUTHORIZATION_HEADER",
             Self::InvalidOrExpiredToken => "INVALID_OR_EXPIRED_TOKEN",
+            Self::InvalidApiKey => "INVALID_API_KEY",
             Self::UsernameAlreadyExists => "USERNAME_ALREADY_EXISTS",
             Self::InvalidCredentials => "INVALID_CREDENTIALS",
             Self::UserNotFound => "USER_NOT_FOUND",
+            Self::ContentNotFound => "CONTENT_NOT_FOUND",
+            Self::InvalidContentStatus => "INVALID_CONTENT_STATUS",
             Self::AlreadyCheckedInToday => "ALREADY_CHECKED_IN_TODAY",
             Self::InsufficientGold => "INSUFFICIENT_GOLD",
             Self::InsufficientDiamonds => "INSUFFICIENT_DIAMONDS",
+            Self::ServiceUnavailable => "SERVICE_UNAVAILABLE",
             Self::FeatureNotImplemented => "FEATURE_NOT_IMPLEMENTED",
         }
     }
@@ -46,12 +54,16 @@ impl BusinessError {
             Self::MissingAuthorizationHeader => "缺少认证信息",
             Self::InvalidAuthorizationHeader => "认证信息格式不正确",
             Self::InvalidOrExpiredToken => "登录状态无效或已过期",
+            Self::InvalidApiKey => "无效的服务密钥",
             Self::UsernameAlreadyExists => "用户名已存在",
             Self::InvalidCredentials => "用户名或密码错误",
             Self::UserNotFound => "用户不存在",
+            Self::ContentNotFound => "内容不存在",
+            Self::InvalidContentStatus => "当前状态不允许此操作",
             Self::AlreadyCheckedInToday => "今天已经签到过了",
             Self::InsufficientGold => "金币不足",
             Self::InsufficientDiamonds => "钻石不足",
+            Self::ServiceUnavailable => "生成服务暂时不可用，请稍后再试",
             Self::FeatureNotImplemented => "该功能暂未实现",
         }
     }
@@ -61,13 +73,16 @@ impl BusinessError {
             Self::MissingAuthorizationHeader
             | Self::InvalidAuthorizationHeader
             | Self::InvalidOrExpiredToken
+            | Self::InvalidApiKey
             | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
-            Self::UserNotFound => StatusCode::NOT_FOUND,
+            Self::UserNotFound | Self::ContentNotFound => StatusCode::NOT_FOUND,
             Self::UsernameAlreadyExists => StatusCode::CONFLICT,
             Self::FeatureNotImplemented => StatusCode::NOT_IMPLEMENTED,
-            Self::AlreadyCheckedInToday | Self::InsufficientGold | Self::InsufficientDiamonds => {
-                StatusCode::BAD_REQUEST
-            }
+            Self::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::AlreadyCheckedInToday
+            | Self::InsufficientGold
+            | Self::InsufficientDiamonds
+            | Self::InvalidContentStatus => StatusCode::BAD_REQUEST,
         }
     }
 }
