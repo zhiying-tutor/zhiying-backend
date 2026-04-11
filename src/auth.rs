@@ -48,6 +48,61 @@ impl FromRequestParts<AppState> for AuthUser {
     }
 }
 
+/// Extractor for microservice authentication via API key.
+///
+/// Matches the `Authorization: Bearer sk-...` header against all configured
+/// API keys and identifies which service is calling.
+#[derive(Debug, Clone)]
+pub struct ServiceAuth {
+    pub service: ServiceKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceKind {
+    KnowledgeVideo,
+    CodeVideo,
+    InteractiveHtml,
+    KnowledgeExplanation,
+}
+
+impl FromRequestParts<AppState> for ServiceAuth {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let authorization = parts
+            .headers
+            .get(AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| AppError::business(BusinessError::MissingAuthorizationHeader))?;
+
+        let token = authorization
+            .strip_prefix("Bearer ")
+            .ok_or_else(|| AppError::business(BusinessError::InvalidAuthorizationHeader))?;
+
+        if !token.starts_with("sk-") {
+            return Err(AppError::business(BusinessError::InvalidApiKey));
+        }
+
+        let config = &state.config;
+        let service = if token == config.knowledge_video_api_key {
+            ServiceKind::KnowledgeVideo
+        } else if token == config.code_video_api_key {
+            ServiceKind::CodeVideo
+        } else if token == config.interactive_html_api_key {
+            ServiceKind::InteractiveHtml
+        } else if token == config.knowledge_explanation_api_key {
+            ServiceKind::KnowledgeExplanation
+        } else {
+            return Err(AppError::business(BusinessError::InvalidApiKey));
+        };
+
+        Ok(Self { service })
+    }
+}
+
 pub fn encode_token(
     user_id: i32,
     username: &str,
