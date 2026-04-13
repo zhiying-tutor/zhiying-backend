@@ -47,6 +47,15 @@ impl TestApp {
             code_video_api_key: "sk-test-code-video".to_owned(),
             interactive_html_api_key: "sk-test-interactive-html".to_owned(),
             knowledge_explanation_api_key: "sk-test-knowledge-explanation".to_owned(),
+            study_subject_diamond_cost: 10,
+            pretest_service_url: "http://localhost:9010".to_owned(),
+            pretest_api_key: "sk-test-pretest".to_owned(),
+            plan_service_url: "http://localhost:9011".to_owned(),
+            plan_api_key: "sk-test-plan".to_owned(),
+            quiz_service_url: "http://localhost:9012".to_owned(),
+            quiz_api_key: "sk-test-quiz".to_owned(),
+            study_quiz_free_limit_per_task: 3,
+            study_quiz_extra_gold_cost: 20,
         };
         let app = build_app(config.clone())
             .await
@@ -615,6 +624,7 @@ async fn user_patch_set_public_works() {
         content: Set(Some("多态是...".to_owned())),
         mindmap: Set(Some(r#"{"title":"多态"}"#.to_owned())),
         public: Set(false),
+        cost: Set(10),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
         ..Default::default()
@@ -667,6 +677,7 @@ async fn knowledge_explanation_callback_with_content_and_mindmap() {
         content: Set(None),
         mindmap: Set(None),
         public: Set(false),
+        cost: Set(10),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
         ..Default::default()

@@ -81,6 +81,7 @@ pub async fn create(
         content: Set(None),
         mindmap: Set(None),
         public: Set(payload.public),
+        cost: Set(cost),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
@@ -191,6 +192,7 @@ pub async fn update(
         active.status = Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing);
         active.content = Set(None);
         active.mindmap = Set(None);
+        active.cost = Set(cost);
         changed = true;
     }
 

@@ -27,6 +27,16 @@ pub enum BusinessError {
     InsufficientDiamonds,
     ServiceUnavailable,
     FeatureNotImplemented,
+    StudySubjectNotFound,
+    InvalidStudySubjectStatus,
+    InvalidStudyTaskStatus,
+    InvalidStudyQuizStatus,
+    IncompleteQuizAnswers,
+    ProblemNotFound,
+    StageNotFound,
+    TaskNotFound,
+    QuizNotFound,
+    StudyQuizProblemNotFound,
 }
 
 impl BusinessError {
@@ -46,6 +56,16 @@ impl BusinessError {
             Self::InsufficientDiamonds => "INSUFFICIENT_DIAMONDS",
             Self::ServiceUnavailable => "SERVICE_UNAVAILABLE",
             Self::FeatureNotImplemented => "FEATURE_NOT_IMPLEMENTED",
+            Self::StudySubjectNotFound => "STUDY_SUBJECT_NOT_FOUND",
+            Self::InvalidStudySubjectStatus => "INVALID_STUDY_SUBJECT_STATUS",
+            Self::InvalidStudyTaskStatus => "INVALID_STUDY_TASK_STATUS",
+            Self::InvalidStudyQuizStatus => "INVALID_STUDY_QUIZ_STATUS",
+            Self::IncompleteQuizAnswers => "INCOMPLETE_QUIZ_ANSWERS",
+            Self::ProblemNotFound => "PROBLEM_NOT_FOUND",
+            Self::StageNotFound => "STAGE_NOT_FOUND",
+            Self::TaskNotFound => "TASK_NOT_FOUND",
+            Self::QuizNotFound => "QUIZ_NOT_FOUND",
+            Self::StudyQuizProblemNotFound => "STUDY_QUIZ_PROBLEM_NOT_FOUND",
         }
     }
 
@@ -65,6 +85,16 @@ impl BusinessError {
             Self::InsufficientDiamonds => "钻石不足",
             Self::ServiceUnavailable => "生成服务暂时不可用，请稍后再试",
             Self::FeatureNotImplemented => "该功能暂未实现",
+            Self::StudySubjectNotFound => "学习主题不存在",
+            Self::InvalidStudySubjectStatus => "当前学习主题状态不允许此操作",
+            Self::InvalidStudyTaskStatus => "当前学习任务状态不允许此操作",
+            Self::InvalidStudyQuizStatus => "当前小测状态不允许此操作",
+            Self::IncompleteQuizAnswers => "请完成所有题目后再提交",
+            Self::ProblemNotFound => "题目不存在",
+            Self::StageNotFound => "学习阶段不存在",
+            Self::TaskNotFound => "学习任务不存在",
+            Self::QuizNotFound => "小测不存在",
+            Self::StudyQuizProblemNotFound => "小测题目不存在",
         }
     }
 
@@ -76,13 +106,23 @@ impl BusinessError {
             | Self::InvalidApiKey
             | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::UserNotFound | Self::ContentNotFound => StatusCode::NOT_FOUND,
+            Self::StudySubjectNotFound
+            | Self::ProblemNotFound
+            | Self::StageNotFound
+            | Self::TaskNotFound
+            | Self::QuizNotFound
+            | Self::StudyQuizProblemNotFound => StatusCode::NOT_FOUND,
             Self::UsernameAlreadyExists => StatusCode::CONFLICT,
             Self::FeatureNotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             Self::AlreadyCheckedInToday
             | Self::InsufficientGold
             | Self::InsufficientDiamonds
-            | Self::InvalidContentStatus => StatusCode::BAD_REQUEST,
+            | Self::InvalidContentStatus
+            | Self::InvalidStudySubjectStatus
+            | Self::InvalidStudyTaskStatus
+            | Self::InvalidStudyQuizStatus
+            | Self::IncompleteQuizAnswers => StatusCode::BAD_REQUEST,
         }
     }
 }

@@ -31,6 +31,17 @@ pub struct Config {
     pub code_video_api_key: String,
     pub interactive_html_api_key: String,
     pub knowledge_explanation_api_key: String,
+
+    // Study subject
+    pub study_subject_diamond_cost: i32,
+    pub pretest_service_url: String,
+    pub pretest_api_key: String,
+    pub plan_service_url: String,
+    pub plan_api_key: String,
+    pub quiz_service_url: String,
+    pub quiz_api_key: String,
+    pub study_quiz_free_limit_per_task: i32,
+    pub study_quiz_extra_gold_cost: i32,
 }
 
 impl Config {
@@ -120,6 +131,34 @@ impl Config {
         let knowledge_explanation_api_key = env::var("KNOWLEDGE_EXPLANATION_API_KEY")
             .unwrap_or_else(|_| "sk-knowledge-explanation-dev".to_owned());
 
+        let study_subject_diamond_cost = env::var("STUDY_SUBJECT_DIAMOND_COST")
+            .unwrap_or_else(|_| "10".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("STUDY_SUBJECT_DIAMOND_COST is invalid"))?;
+
+        let pretest_service_url =
+            env::var("PRETEST_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8010".to_owned());
+        let pretest_api_key =
+            env::var("PRETEST_API_KEY").unwrap_or_else(|_| "sk-pretest-dev".to_owned());
+
+        let plan_service_url =
+            env::var("PLAN_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8011".to_owned());
+        let plan_api_key = env::var("PLAN_API_KEY").unwrap_or_else(|_| "sk-plan-dev".to_owned());
+
+        let quiz_service_url =
+            env::var("QUIZ_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8012".to_owned());
+        let quiz_api_key = env::var("QUIZ_API_KEY").unwrap_or_else(|_| "sk-quiz-dev".to_owned());
+
+        let study_quiz_free_limit_per_task = env::var("STUDY_QUIZ_FREE_LIMIT_PER_TASK")
+            .unwrap_or_else(|_| "3".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("STUDY_QUIZ_FREE_LIMIT_PER_TASK is invalid"))?;
+
+        let study_quiz_extra_gold_cost = env::var("STUDY_QUIZ_EXTRA_GOLD_COST")
+            .unwrap_or_else(|_| "20".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("STUDY_QUIZ_EXTRA_GOLD_COST is invalid"))?;
+
         Ok(Self {
             host,
             port,
@@ -142,6 +181,15 @@ impl Config {
             code_video_api_key,
             interactive_html_api_key,
             knowledge_explanation_api_key,
+            study_subject_diamond_cost,
+            pretest_service_url,
+            pretest_api_key,
+            plan_service_url,
+            plan_api_key,
+            quiz_service_url,
+            quiz_api_key,
+            study_quiz_free_limit_per_task,
+            study_quiz_extra_gold_cost,
         })
     }
 }

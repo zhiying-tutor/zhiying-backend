@@ -63,6 +63,9 @@ pub enum ServiceKind {
     CodeVideo,
     InteractiveHtml,
     KnowledgeExplanation,
+    Pretest,
+    Plan,
+    Quiz,
 }
 
 impl FromRequestParts<AppState> for ServiceAuth {
@@ -95,6 +98,12 @@ impl FromRequestParts<AppState> for ServiceAuth {
             ServiceKind::InteractiveHtml
         } else if token == config.knowledge_explanation_api_key {
             ServiceKind::KnowledgeExplanation
+        } else if token == config.pretest_api_key {
+            ServiceKind::Pretest
+        } else if token == config.plan_api_key {
+            ServiceKind::Plan
+        } else if token == config.quiz_api_key {
+            ServiceKind::Quiz
         } else {
             return Err(AppError::business(BusinessError::InvalidApiKey));
         };

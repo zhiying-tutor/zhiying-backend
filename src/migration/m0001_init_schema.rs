@@ -2,7 +2,8 @@ use sea_orm::Schema;
 use sea_orm_migration::prelude::*;
 
 use crate::entities::{
-    code_video, interactive_html, knowledge_explanation, knowledge_video, user, user_checkin,
+    code_video, interactive_html, knowledge_explanation, knowledge_video, pretest_problem, problem,
+    study_quiz, study_quiz_problem, study_stage, study_subject, study_task, user, user_checkin,
 };
 
 #[derive(DeriveMigrationName)]
@@ -38,11 +39,47 @@ impl MigrationTrait for Migration {
         knowledge_explanation_table.if_not_exists();
         manager.create_table(knowledge_explanation_table).await?;
 
+        let mut study_subject_table = schema.create_table_from_entity(study_subject::Entity);
+        study_subject_table.if_not_exists();
+        manager.create_table(study_subject_table).await?;
+
+        let mut problem_table = schema.create_table_from_entity(problem::Entity);
+        problem_table.if_not_exists();
+        manager.create_table(problem_table).await?;
+
+        let mut pretest_problem_table = schema.create_table_from_entity(pretest_problem::Entity);
+        pretest_problem_table.if_not_exists();
+        manager.create_table(pretest_problem_table).await?;
+
+        let mut study_stage_table = schema.create_table_from_entity(study_stage::Entity);
+        study_stage_table.if_not_exists();
+        manager.create_table(study_stage_table).await?;
+
+        let mut study_task_table = schema.create_table_from_entity(study_task::Entity);
+        study_task_table.if_not_exists();
+        manager.create_table(study_task_table).await?;
+
+        let mut study_quiz_table = schema.create_table_from_entity(study_quiz::Entity);
+        study_quiz_table.if_not_exists();
+        manager.create_table(study_quiz_table).await?;
+
+        let mut study_quiz_problem_table =
+            schema.create_table_from_entity(study_quiz_problem::Entity);
+        study_quiz_problem_table.if_not_exists();
+        manager.create_table(study_quiz_problem_table).await?;
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         for table in [
+            "study_quiz_problem",
+            "study_quiz",
+            "study_task",
+            "study_stage",
+            "pretest_problem",
+            "problem",
+            "study_subject",
             "knowledge_explanation",
             "interactive_html",
             "code_video",

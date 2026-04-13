@@ -5,34 +5,31 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(
     rs_type = "String",
     db_type = "String(StringLen::N(16))",
-    enum_name = "knowledge_explanation_status"
+    enum_name = "study_quiz_status"
 )]
-pub enum KnowledgeExplanationStatus {
+pub enum StudyQuizStatus {
     #[sea_orm(string_value = "QUEUING")]
     Queuing,
     #[sea_orm(string_value = "GENERATING")]
     Generating,
-    #[sea_orm(string_value = "FINISHED")]
-    Finished,
+    #[sea_orm(string_value = "READY")]
+    Ready,
+    #[sea_orm(string_value = "SUBMITTED")]
+    Submitted,
     #[sea_orm(string_value = "FAILED")]
     Failed,
 }
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "knowledge_explanation")]
+#[sea_orm(table_name = "study_quiz")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub user_id: i32,
-    pub status: KnowledgeExplanationStatus,
-    #[sea_orm(column_type = "Text")]
-    pub prompt: String,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub content: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub mindmap: Option<String>,
-    pub public: bool,
+    pub study_task_id: i32,
+    pub status: StudyQuizStatus,
     pub cost: i32,
+    pub total_problems: i32,
+    pub correct_problems: i32,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
@@ -40,16 +37,24 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::user::Entity",
-        from = "Column::UserId",
-        to = "super::user::Column::Id"
+        belongs_to = "super::study_task::Entity",
+        from = "Column::StudyTaskId",
+        to = "super::study_task::Column::Id"
     )]
-    User,
+    StudyTask,
+    #[sea_orm(has_many = "super::study_quiz_problem::Entity")]
+    StudyQuizProblems,
 }
 
-impl Related<super::user::Entity> for Entity {
+impl Related<super::study_task::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::User.def()
+        Relation::StudyTask.def()
+    }
+}
+
+impl Related<super::study_quiz_problem::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StudyQuizProblems.def()
     }
 }
 
