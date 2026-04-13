@@ -30,11 +30,12 @@
 ## 当前目录约定
 
 - `src/routes/`：按资源领域拆分的 HTTP handler 与路由。
-- `src/entities/`：SeaORM entity 定义。
-- `src/services/`：不直接依赖 HTTP 协议的业务逻辑或通用逻辑。
+- `src/entities/`：SeaORM entity 定义。`entities/common.rs` 存放跨实体共享的枚举（如 `ProblemAnswer`）。
+- `src/services/`：不直接依赖 HTTP 协议的业务逻辑或通用逻辑，包括微服务 dispatch 函数。
 - `src/migration/`：SeaORM migration 定义。
 - `src/config.rs`：环境变量配置解析。
 - `src/error.rs`：统一错误码、错误响应与错误映射。
+- `src/auth.rs`：JWT 鉴权（`AuthUser`）和微服务 API Key 鉴权（`ServiceAuth` / `ServiceKind`）。
 - `src/main.rs`：应用启动入口，启动时直接执行 migration。
 
 ## 路由约定
@@ -72,3 +73,19 @@
 - 当前仍处于早期开发阶段，不需要为了兼容旧实现而保留无实际价值的老旧代码、过渡封装或未再使用的旧文件；确认无引用后应直接删除。
 - 提交前先参考 `git log --oneline` 的现有风格，当前提交信息使用简洁的前缀式格式，例如 `feat: ...`、`init: ...`。
 - 如果某个模块尚未实现，优先提供清晰的占位路由或明确的未实现错误，而不是留下行为不明的半成品。
+
+## 异步微服务回调约定
+
+- 内容生成类微服务（knowledge_video / code_video / interactive_html / knowledge_explanation）的回调使用 `PATCH /internal/{resource}/{id}`，dispatch 发送到 `{SERVICE_URL}/generate`。
+- 学习主题类微服务（pretest / plan / quiz）的回调使用 `POST /internal/{resource}/{id}`，dispatch 发送到 `{SERVICE_URL}` 根路径。
+- 微服务 API Key 统一以 `sk-` 前缀开头，通过 `ServiceAuth` 提取器区分来源。
+- 回调状态枚举统一为大写字符串：`QUEUING`、`GENERATING`、`FINISHED`、`FAILED`。
+- FAILED 状态统一触发退款，退款金额读取记录上的 `cost` 字段（而非配置值）。
+
+## 学习主题模块设计约定
+
+- 学习主题状态机为 8 个状态（PretestQueuing → ... → Studying → Finished / Failed），回调通过 API Key 区分 pretest 和 plan 来源。
+- 阶段（StudyStage）和任务（StudyTask）各 3 个状态（Locked / Studying / Finished），强制按 sort_order 顺序解锁。
+- 资源所有权校验通过 JOIN 链向上追溯到 `study_subject.user_id`。
+- 题目（problem）归属用户，课前测（pretest_problem）和小测（study_quiz_problem）为关联表。
+- 统计字段（total_stages/finished_stages、total_tasks/finished_tasks）使用非规范化设计，在状态变更时维护。

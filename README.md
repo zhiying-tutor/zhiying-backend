@@ -18,17 +18,88 @@
 
 ## 当前状态
 
-项目已经完成基础后端骨架，当前可编译运行，已实现的核心能力包括：
+项目已完成用户/认证/签到核心链路、4 种独立内容生成资源的异步任务架构，以及完整的学习主题模块（课前测、学习计划、阶段/任务顺序解锁、小测、题目管理）。
 
-- 用户注册：`POST /api/v1/users`
-- 用户登录：`POST /api/v1/tokens`
-- 当前用户信息：`GET /api/v1/me`
-- 更新当前用户信息：`PATCH /api/v1/me`
-- 签到：`POST /api/v1/checkins`
-- 查询签到记录：`GET /api/v1/checkins`
-- 健康检查：`GET /health`
+## API 概览
 
-其余业务模块当前保留了占位路由，后续继续按资源领域补齐。
+### 用户与认证
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/users` | 用户注册 |
+| `POST` | `/api/v1/tokens` | 用户登录 |
+| `GET` | `/api/v1/me` | 当前用户信息 |
+| `PATCH` | `/api/v1/me` | 更新当前用户信息 |
+
+### 签到
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/checkins` | 签到（支持补签） |
+| `GET` | `/api/v1/checkins` | 查询签到记录 |
+
+### 内容生成
+
+4 种独立资源：`knowledge-videos`、`code-videos`、`interactive-htmls`、`knowledge-explanations`，每种资源接口格式一致：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/{resource}` | 创建生成任务（扣费） |
+| `GET` | `/api/v1/{resource}/{id}` | 查询任务状态 |
+| `PATCH` | `/api/v1/{resource}/{id}` | 设置公开 / 重新生成 |
+
+### 学习主题
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/study-subjects` | 创建学习主题（扣钻石，触发课前测生成） |
+| `GET` | `/api/v1/study-subjects` | 列表 |
+| `GET` | `/api/v1/study-subjects/{id}` | 详情 |
+| `GET` | `/api/v1/study-subjects/{id}/pretest` | 获取课前测题目 |
+| `PATCH` | `/api/v1/study-subjects/{id}/pretest/{pretest_problem_id}` | 更新课前测答案 |
+| `POST` | `/api/v1/study-subjects/{id}/plan` | 提交课前测并创建学习计划 |
+
+### 学习阶段与任务
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/study-stages/{id}` | 获取阶段详情（含任务列表） |
+| `GET` | `/api/v1/study-tasks/{id}` | 获取任务详情 |
+| `POST` | `/api/v1/study-tasks/{id}/complete` | 标记任务完成（触发顺序解锁） |
+| `POST` | `/api/v1/study-tasks/{id}/knowledge-video` | 请求生成知识视频（付费） |
+| `POST` | `/api/v1/study-tasks/{id}/interactive-html` | 请求生成互动课件（付费） |
+| `POST` | `/api/v1/study-tasks/{id}/explanation` | 请求生成知识讲解（免费） |
+| `POST` | `/api/v1/study-tasks/{id}/quizzes` | 创建小测 |
+| `GET` | `/api/v1/study-tasks/{id}/quizzes` | 获取任务的小测列表 |
+
+### 小测
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/study-quizzes/{id}` | 获取小测详情（含题目） |
+| `PATCH` | `/api/v1/study-quizzes/{quiz_id}/problems/{study_quiz_problem_id}` | 更新小测题目答案 |
+| `POST` | `/api/v1/study-quizzes/{id}/submit` | 提交小测 |
+
+### 题目管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/problems` | 题目列表（支持 `?bookmarked=true&wrong=true`） |
+| `PATCH` | `/api/v1/problems/{id}/bookmark` | 切换收藏 |
+
+### 内部回调
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `PATCH` | `/internal/{content-resource}/{id}` | 内容生成微服务回调 |
+| `POST` | `/internal/study-subjects/{id}` | 学习主题回调（pretest / plan） |
+| `POST` | `/internal/study-quizzes/{id}` | 小测回调 |
+
+### 其他
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/health` | 健康检查 |
 
 ## 本地启动
 
@@ -52,33 +123,18 @@ cargo run
 
 可参考 [.env.example](.env.example)。
 
-核心配置项包括：
-
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `JWT_TTL_DAYS`
-- `CORS_ALLOW_ORIGIN`
-- `CHECKIN_REWARD_SEQUENCE`
-- `CHECKIN_MAKEUP_GOLD_COST_PER_DAY`
-- `CHECKIN_MAKEUP_DIAMOND_COST`
-
-默认配置中：
-
-- JWT 过期时间为 30 天
-- 连续签到奖励序列为 `1,2,3,4,6,8,10`
-- 补签金币成本为每断签 1 天消耗 50 金币
-- 补签钻石成本为每次补签固定消耗 1 钻石
-
 ## 项目结构
 
 ```text
 src/
   routes/      HTTP 路由与 handler，按资源领域拆分
   entities/    SeaORM entity
-  services/    业务逻辑与通用逻辑
+  services/    业务逻辑与微服务 dispatch
+  migration/   数据库迁移
   config.rs    环境变量配置
   error.rs     统一错误模型与错误响应
-  bootstrap.rs 启动期数据库初始化
+  auth.rs      JWT 鉴权与微服务 API Key 鉴权
+  main.rs      应用启动入口
 ```
 
 ## 文档

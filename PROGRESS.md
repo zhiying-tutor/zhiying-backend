@@ -1,10 +1,10 @@
 # PROGRESS.md
 
-最后更新：2026-04-02
+最后更新：2026-04-13
 
 ## 当前状态
 
-项目已完成用户/认证/签到核心链路，以及 4 种独立内容生成资源的异步任务架构。
+项目已完成用户/认证/签到核心链路、4 种独立内容生成资源的异步任务架构，以及完整的学习主题模块。
 
 当前可通过 `cargo check` 和 `cargo test`（12 个测试全部通过）。
 
@@ -32,7 +32,7 @@
 - 当前 migration 采用早期开发阶段的顺序编号风格，首个 migration 为 `m0001_init_schema.rs`。
 - 已补充基础 HTTP 级测试，覆盖认证、签到、内容生成回调等场景。
 
-### 内容生成模块（新增）
+### 内容生成模块
 
 - 实现 4 种独立内容生成资源：
   - `knowledge_video`（知识点视频，扣钻石）
@@ -52,7 +52,25 @@
 - 每种微服务各自独立的 URL、API_KEY、费用配置（环境变量）
 - `knowledge_explanation` 直接存储 `content`（文本）和 `mindmap`（JSON），不使用 url
 - 其余三种资源使用 `url` 字段（由微服务回调写入）
+- `knowledge_explanation` 新增 `cost` 字段区分付费（用户自主生成）和免费（学习任务下生成）
 - 已补充集成测试：回调状态更新、退款、非法状态流转、错误 API_KEY、用户 PATCH 等
+
+### 学习主题模块
+
+- 实现完整学习主题生命周期，新增 7 个实体：
+  - `study_subject`（8 个状态的状态机）
+  - `problem`（题目，归属用户，单选 A/B/C/D）
+  - `pretest_problem`（课前测关联表，含自信程度）
+  - `study_stage`（学习阶段，3 状态顺序解锁）
+  - `study_task`（学习任务，3 状态顺序解锁，持有 3 个可空内容外键）
+  - `study_quiz`（小测，5 状态，含免费额度限制）
+  - `study_quiz_problem`（小测题目关联表）
+- 课前测生成 → 用户逐题作答 → 学习计划结构生成 → 阶段/任务顺序解锁 → 任务内容按需生成 → 小测生成/作答/提交 → 题目收藏/错题查询
+- 3 个新增微服务 dispatch 函数（pretest / plan / quiz），POST 到根路径
+- 8×6 回调状态转换表（10 个合法转换，38 个拒绝）
+- 顺序解锁逻辑：完成任务 → 解锁下一个任务 → 阶段完成 → 解锁下一个阶段
+- 小测免费额度机制：每任务 N 次免费（可配置），超出扣金币
+- 所有权校验通过 JOIN 链追溯到 `study_subject.user_id`
 
 ## 当前签到规则实现
 
@@ -70,38 +88,13 @@
   - 超出序列长度后沿用最后一个值
 - 签到当前不发经验。
 
-## 当前配置项
-
-- `APP_HOST`
-- `APP_PORT`
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `JWT_TTL_DAYS`
-- `CORS_ALLOW_ORIGIN`
-- `CHECKIN_REWARD_SEQUENCE`
-- `CHECKIN_MAKEUP_GOLD_COST_PER_DAY`
-- `CHECKIN_MAKEUP_DIAMOND_COST`
-- `KNOWLEDGE_VIDEO_DIAMOND_COST`
-- `CODE_VIDEO_DIAMOND_COST`
-- `INTERACTIVE_HTML_GOLD_COST`
-- `KNOWLEDGE_EXPLANATION_GOLD_COST`
-- `KNOWLEDGE_VIDEO_SERVICE_URL` / `KNOWLEDGE_VIDEO_API_KEY`
-- `CODE_VIDEO_SERVICE_URL` / `CODE_VIDEO_API_KEY`
-- `INTERACTIVE_HTML_SERVICE_URL` / `INTERACTIVE_HTML_API_KEY`
-- `KNOWLEDGE_EXPLANATION_SERVICE_URL` / `KNOWLEDGE_EXPLANATION_API_KEY`
-
 ## 尚未完成
 
-- 学习计划相关实体与接口（含课前测 + 学习计划生成异步流程）
-- 学习阶段相关实体与接口
-- 学习任务相关实体与接口
-- 题目与前测相关实体与接口
-- 学习计划关联的 knowledge_explanation（独立表，区别于用户自主生成）
 - 聚合查询接口（`my-contents`、`public-contents`）
 - 更多业务表结构与后续 schema 演进
 
 ## 下一步建议
 
-1. 按资源领域优先落地 `study_plans`（含课前测 + 异步生成流程），再逐步展开 `study_stages / study_tasks / problems`。
-2. 实现 `my-contents` 和 `public-contents` 聚合查询。
+1. 实现 `my-contents` 和 `public-contents` 聚合查询。
+2. 补充学习主题模块的集成测试。
 3. 在新增业务资源时同步补对应 migration；在仍可删库重建的阶段内，优先维护初始化 migration 的清晰度。
