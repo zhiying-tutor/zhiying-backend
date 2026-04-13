@@ -42,6 +42,9 @@ pub struct Config {
     pub quiz_api_key: String,
     pub study_quiz_free_limit_per_task: i32,
     pub study_quiz_extra_gold_cost: i32,
+
+    // Recharge
+    pub recharge_api_key: String,
 }
 
 impl Config {
@@ -159,6 +162,9 @@ impl Config {
             .parse()
             .map_err(|_| AppError::internal("STUDY_QUIZ_EXTRA_GOLD_COST is invalid"))?;
 
+        let recharge_api_key =
+            env::var("RECHARGE_API_KEY").unwrap_or_else(|_| "sk-recharge-dev".to_owned());
+
         Ok(Self {
             host,
             port,
@@ -190,6 +196,7 @@ impl Config {
             quiz_api_key,
             study_quiz_free_limit_per_task,
             study_quiz_extra_gold_cost,
+            recharge_api_key,
         })
     }
 }

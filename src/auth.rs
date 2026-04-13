@@ -66,6 +66,7 @@ pub enum ServiceKind {
     Pretest,
     Plan,
     Quiz,
+    Recharge,
 }
 
 impl FromRequestParts<AppState> for ServiceAuth {
@@ -104,6 +105,8 @@ impl FromRequestParts<AppState> for ServiceAuth {
             ServiceKind::Plan
         } else if token == config.quiz_api_key {
             ServiceKind::Quiz
+        } else if token == config.recharge_api_key {
+            ServiceKind::Recharge
         } else {
             return Err(AppError::business(BusinessError::InvalidApiKey));
         };

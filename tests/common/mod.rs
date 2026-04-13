@@ -66,6 +66,7 @@ impl TestApp {
             quiz_api_key: "sk-test-quiz".to_owned(),
             study_quiz_free_limit_per_task: 3,
             study_quiz_extra_gold_cost: 20,
+            recharge_api_key: "sk-test-recharge".to_owned(),
         };
         let app = build_app(config.clone())
             .await

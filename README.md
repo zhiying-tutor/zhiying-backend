@@ -94,6 +94,7 @@
 | `PATCH` | `/internal/{content-resource}/{id}` | 内容生成微服务回调 |
 | `POST` | `/internal/study-subjects/{id}` | 学习主题回调（pretest / plan） |
 | `POST` | `/internal/study-quizzes/{id}` | 小测回调 |
+| `POST` | `/internal/users/{id}/balance` | 充值（增减金币/钻石，API_KEY 鉴权） |
 
 ### 其他
 

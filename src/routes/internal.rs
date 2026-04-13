@@ -31,6 +31,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/study-subjects/{id}", post(callback_study_subject))
         .route("/study-quizzes/{id}", post(callback_study_quiz))
+        .route("/users/{id}/balance", post(recharge_balance))
 }
 
 #[derive(Debug, Deserialize)]
@@ -677,4 +678,58 @@ async fn callback_study_quiz(
     Ok(ok(
         serde_json::json!({"id": id, "status": format!("{:?}", new_status)}),
     ))
+}
+
+// --- recharge ---
+
+#[derive(Debug, Deserialize)]
+struct RechargeRequest {
+    gold: Option<i32>,
+    diamond: Option<i32>,
+}
+
+async fn recharge_balance(
+    State(state): State<AppState>,
+    service_auth: ServiceAuth,
+    Path(id): Path<i32>,
+    Json(payload): Json<RechargeRequest>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    if service_auth.service != ServiceKind::Recharge {
+        return Err(AppError::business(BusinessError::InvalidApiKey));
+    }
+
+    if payload.gold.is_none() && payload.diamond.is_none() {
+        return Err(AppError::ValidationFailed);
+    }
+
+    let tx = state.db.begin().await?;
+
+    let existing = user::Entity::find_by_id(id)
+        .one(&tx)
+        .await?
+        .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
+
+    let new_gold = existing.gold + payload.gold.unwrap_or(0);
+    let new_diamond = existing.diamond + payload.diamond.unwrap_or(0);
+
+    if new_gold < 0 {
+        return Err(AppError::business(BusinessError::InsufficientGold));
+    }
+    if new_diamond < 0 {
+        return Err(AppError::business(BusinessError::InsufficientDiamonds));
+    }
+
+    let mut active: user::ActiveModel = existing.into();
+    active.gold = Set(new_gold);
+    active.diamond = Set(new_diamond);
+    active.updated_at = Set(Utc::now());
+    active.update(&tx).await?;
+
+    tx.commit().await?;
+
+    Ok(ok(serde_json::json!({
+        "id": id,
+        "gold": new_gold,
+        "diamond": new_diamond,
+    })))
 }
