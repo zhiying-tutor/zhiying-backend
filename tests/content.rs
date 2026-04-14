@@ -624,3 +624,243 @@ async fn knowledge_explanation_failed_refunds_gold() {
     let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
     assert_eq!(me_body["data"]["gold"], 100);
 }
+
+#[tokio::test]
+async fn content_retry_failed_kv_insufficient_diamonds_returns_400() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    // 0 diamonds
+    app.update_user_state("alice", None, 0, 0, 100, 0).await;
+
+    let db = app.db().await;
+    knowledge_video::ActiveModel {
+        user_id: Set(1),
+        status: Set(knowledge_video::KnowledgeVideoStatus::Failed),
+        prompt: Set("test".to_owned()),
+        url: Set(None),
+        public: Set(false),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/knowledge-videos/1",
+            Some(&token),
+            Some(json!({"retry": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INSUFFICIENT_DIAMONDS");
+}
+
+#[tokio::test]
+async fn content_retry_failed_ih_insufficient_gold_returns_400() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    // 0 gold
+    app.update_user_state("alice", None, 0, 0, 0, 50).await;
+
+    let db = app.db().await;
+    interactive_html::ActiveModel {
+        user_id: Set(1),
+        status: Set(interactive_html::InteractiveHtmlStatus::Failed),
+        prompt: Set("test".to_owned()),
+        url: Set(None),
+        public: Set(false),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/interactive-htmls/1",
+            Some(&token),
+            Some(json!({"retry": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INSUFFICIENT_GOLD");
+}
+
+#[tokio::test]
+async fn content_retry_failed_ke_insufficient_gold_returns_400() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    // 0 gold
+    app.update_user_state("alice", None, 0, 0, 0, 50).await;
+
+    let db = app.db().await;
+    knowledge_explanation::ActiveModel {
+        user_id: Set(1),
+        status: Set(knowledge_explanation::KnowledgeExplanationStatus::Failed),
+        prompt: Set("test".to_owned()),
+        content: Set(None),
+        mindmap: Set(None),
+        public: Set(false),
+        cost: Set(10),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/knowledge-explanations/1",
+            Some(&token),
+            Some(json!({"retry": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INSUFFICIENT_GOLD");
+}
+
+#[tokio::test]
+async fn content_retry_non_failed_interactive_html_returns_400() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let db = app.db().await;
+    interactive_html::ActiveModel {
+        user_id: Set(1),
+        status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
+        prompt: Set("test".to_owned()),
+        url: Set(None),
+        public: Set(false),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/interactive-htmls/1",
+            Some(&token),
+            Some(json!({"retry": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_CONTENT_STATUS");
+}
+
+#[tokio::test]
+async fn content_patch_nonexistent_knowledge_video_returns_404() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/knowledge-videos/999",
+            Some(&token),
+            Some(json!({"public": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "CONTENT_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn content_set_public_non_owner_returns_404() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("alice", "password123").await;
+    let token_bob = app.create_user_and_login("bob", "password123").await;
+
+    let db = app.db().await;
+    knowledge_explanation::ActiveModel {
+        user_id: Set(1), // alice
+        status: Set(knowledge_explanation::KnowledgeExplanationStatus::Finished),
+        prompt: Set("test".to_owned()),
+        content: Set(Some("content".to_owned())),
+        mindmap: Set(None),
+        public: Set(false),
+        cost: Set(10),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
+
+    // Bob tries to set Alice's content public
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/knowledge-explanations/1",
+            Some(&token_bob),
+            Some(json!({"public": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "CONTENT_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn internal_callback_cross_service_key_on_ih_rejected() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("alice", "password123").await;
+
+    let db = app.db().await;
+    interactive_html::ActiveModel {
+        user_id: Set(1),
+        status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
+        prompt: Set("test".to_owned()),
+        url: Set(None),
+        public: Set(false),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
+
+    // Use knowledge_video key on interactive_html endpoint
+    let wrong_key = &app.config.knowledge_video_api_key;
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/internal/interactive-htmls/1",
+            Some(wrong_key),
+            Some(json!({"status": "GENERATING"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["code"], "INVALID_API_KEY");
+}
+
+#[tokio::test]
+async fn internal_callback_nonexistent_resource_returns_404() {
+    let app = TestApp::new().await;
+    let api_key = &app.config.knowledge_video_api_key;
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/internal/knowledge-videos/999",
+            Some(api_key),
+            Some(json!({"status": "GENERATING"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "CONTENT_NOT_FOUND");
+}

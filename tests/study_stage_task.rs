@@ -369,3 +369,183 @@ async fn study_task_explanation_locked_returns_400() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_STUDY_TASK_STATUS");
 }
+
+#[tokio::test]
+async fn study_task_get_other_users_returns_404() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("alice", "password123").await;
+    let token_bob = app.create_user_and_login("bob", "password123").await;
+
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
+
+    let (status, body) = app
+        .request(
+            "GET",
+            &format!("/api/v1/study-tasks/{}", task_ids[0][0]),
+            Some(&token_bob),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "TASK_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn study_task_complete_other_users_returns_404() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("alice", "password123").await;
+    let token_bob = app.create_user_and_login("bob", "password123").await;
+
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            &format!("/api/v1/study-tasks/{}/complete", task_ids[0][0]),
+            Some(&token_bob),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "TASK_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn study_task_complete_nonexistent_returns_404() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/v1/study-tasks/999/complete",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "TASK_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn study_task_create_kv_finished_task_succeeds() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.update_user_state("alice", None, 0, 0, 100, 50).await;
+
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 2).await;
+
+    // Complete first task
+    app.request(
+        "POST",
+        &format!("/api/v1/study-tasks/{}/complete", task_ids[0][0]),
+        Some(&token),
+        None,
+    )
+    .await;
+
+    // Can still create knowledge video for finished task (status != Locked)
+    let (_status, body) = app
+        .request(
+            "POST",
+            &format!("/api/v1/study-tasks/{}/knowledge-video", task_ids[0][0]),
+            Some(&token),
+            Some(json!({"prompt": "review this topic"})),
+        )
+        .await;
+    // Dispatch will fail (no service), but the status check should pass.
+    // If the service is unreachable, we get SERVICE_UNAVAILABLE (503),
+    // but the point is: it should NOT return INVALID_STUDY_TASK_STATUS.
+    assert_ne!(body["code"], "INVALID_STUDY_TASK_STATUS");
+}
+
+#[tokio::test]
+async fn study_task_create_quiz_locked_returns_400() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.update_user_state("alice", None, 0, 0, 100, 50).await;
+
+    // 1 stage, 2 tasks — second task is locked
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 2).await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            &format!("/api/v1/study-tasks/{}/quizzes", task_ids[0][1]),
+            Some(&token),
+            Some(json!({"prompt": "test quiz"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_STUDY_TASK_STATUS");
+}
+
+#[tokio::test]
+async fn study_task_create_explanation_finished_succeeds() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 2).await;
+
+    // Complete first task
+    app.request(
+        "POST",
+        &format!("/api/v1/study-tasks/{}/complete", task_ids[0][0]),
+        Some(&token),
+        None,
+    )
+    .await;
+
+    // Create explanation for finished task — should NOT return INVALID_STUDY_TASK_STATUS
+    let (_status, body) = app
+        .request(
+            "POST",
+            &format!("/api/v1/study-tasks/{}/explanation", task_ids[0][0]),
+            Some(&token),
+            Some(json!({"prompt": "review explanation"})),
+        )
+        .await;
+    // Dispatch will fail (no service), but the point is the status check passes
+    assert_ne!(body["code"], "INVALID_STUDY_TASK_STATUS");
+}
+
+#[tokio::test]
+async fn study_task_list_quizzes_other_user_returns_404() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("alice", "password123").await;
+    let token_bob = app.create_user_and_login("bob", "password123").await;
+
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
+
+    let (status, body) = app
+        .request(
+            "GET",
+            &format!("/api/v1/study-tasks/{}/quizzes", task_ids[0][0]),
+            Some(&token_bob),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "TASK_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn study_task_create_ih_locked_returns_400() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.update_user_state("alice", None, 0, 0, 100, 50).await;
+
+    // 1 stage, 2 tasks — second task is locked
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 2).await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            &format!("/api/v1/study-tasks/{}/interactive-html", task_ids[0][1]),
+            Some(&token),
+            Some(json!({"prompt": "test"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_STUDY_TASK_STATUS");
+}

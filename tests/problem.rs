@@ -223,3 +223,65 @@ async fn problems_toggle_bookmark() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["bookmarked"], false);
 }
+
+#[tokio::test]
+async fn problems_bookmark_nonexistent_returns_404() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request("PATCH", "/api/v1/problems/999/bookmark", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "PROBLEM_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn problems_bookmark_other_user_returns_404() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("alice", "password123").await;
+    let token_bob = app.create_user_and_login("bob", "password123").await;
+
+    let db = app.db().await;
+    let now = Utc::now();
+    let p = problem::ActiveModel {
+        user_id: Set(1), // alice
+        content: Set("Q1".to_owned()),
+        choice_a: Set("A".to_owned()),
+        choice_b: Set("B".to_owned()),
+        choice_c: Set("C".to_owned()),
+        choice_d: Set("D".to_owned()),
+        answer: Set(ProblemAnswer::A),
+        explanation: Set("E".to_owned()),
+        bookmarked: Set(false),
+        created_at: Set(now),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
+
+    // Bob tries to bookmark Alice's problem
+    let (status, body) = app
+        .request(
+            "PATCH",
+            &format!("/api/v1/problems/{}/bookmark", p.id),
+            Some(&token_bob),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "PROBLEM_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn problems_list_empty_returns_empty_array() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request("GET", "/api/v1/problems", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"].as_array().map(Vec::len), Some(0));
+}

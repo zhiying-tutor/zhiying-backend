@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde_json::json;
+use tower::ServiceExt;
 use zhiying_backend::entities::knowledge_explanation;
 
 use common::TestApp;
@@ -131,4 +132,70 @@ async fn profile_empty_update_succeeds() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["username"], "alice");
+}
+
+#[tokio::test]
+async fn profile_update_all_fields_at_once() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/me",
+            Some(&token),
+            Some(json!({
+                "birth_year": 2005,
+                "gender": "Male",
+                "introduction": "你好，世界"
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["birth_year"], 2005);
+    assert_eq!(body["data"]["gender"], "Male");
+    assert_eq!(body["data"]["introduction"], "你好，世界");
+}
+
+#[tokio::test]
+async fn profile_get_returns_default_values() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["username"], "alice");
+    assert_eq!(body["data"]["gold"], 0);
+    assert_eq!(body["data"]["diamond"], 0);
+    assert_eq!(body["data"]["streak_checkin"], 0);
+    assert_eq!(body["data"]["total_checkin"], 0);
+    assert!(body["data"]["birth_year"].is_null());
+    assert!(body["data"]["gender"].is_null());
+    assert_eq!(body["data"]["introduction"], "");
+}
+
+#[tokio::test]
+async fn profile_update_invalid_gender_returns_422() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    // Send raw JSON with invalid gender value — axum's Json<T> deserialization will fail
+    let request = axum::http::Request::builder()
+        .method("PATCH")
+        .uri("/api/v1/me")
+        .header(axum::http::header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(axum::body::Body::from(
+            r#"{"gender": "Invalid"}"#.to_string(),
+        ))
+        .expect("build request");
+
+    let response = app
+        .app
+        .clone()
+        .oneshot(request)
+        .await
+        .expect("request failed");
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }

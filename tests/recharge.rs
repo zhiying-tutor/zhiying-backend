@@ -223,3 +223,51 @@ async fn recharge_accumulates_correctly() {
     assert_eq!(body["data"]["gold"], 150);
     assert_eq!(body["data"]["diamond"], 10);
 }
+
+#[tokio::test]
+async fn recharge_zero_values_succeeds() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("recharge_user10", "password123")
+        .await;
+    let api_key = &app.config.recharge_api_key;
+
+    app.update_user_state("recharge_user10", None, 0, 0, 100, 50)
+        .await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/v1/internal/users/1/balance",
+            Some(api_key),
+            Some(json!({"gold": 0, "diamond": 0})),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["gold"], 100);
+    assert_eq!(body["data"]["diamond"], 50);
+}
+
+#[tokio::test]
+async fn recharge_deduct_to_exact_zero_succeeds() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("recharge_user11", "password123")
+        .await;
+    let api_key = &app.config.recharge_api_key;
+
+    app.update_user_state("recharge_user11", None, 0, 0, 100, 50)
+        .await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/v1/internal/users/1/balance",
+            Some(api_key),
+            Some(json!({"gold": -100, "diamond": -50})),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["gold"], 0);
+    assert_eq!(body["data"]["diamond"], 0);
+}

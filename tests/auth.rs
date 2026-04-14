@@ -212,3 +212,30 @@ async fn register_password_too_long_returns_400() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "VALIDATION_FAILED");
 }
+
+#[tokio::test]
+async fn register_duplicate_username_returns_409() {
+    let app = TestApp::new().await;
+    app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/v1/users",
+            None,
+            Some(json!({"username": "alice", "password": "different_pw123"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "USERNAME_ALREADY_EXISTS");
+}
+
+#[tokio::test]
+async fn auth_malformed_bearer_token_returns_401() {
+    let app = TestApp::new().await;
+    let (status, body) = app
+        .request_with_raw_auth("GET", "/api/v1/me", "Bearer not-a-jwt-token", None)
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["code"], "INVALID_OR_EXPIRED_TOKEN");
+}
