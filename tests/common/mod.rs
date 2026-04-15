@@ -20,7 +20,8 @@ use zhiying_backend::{
     build_app,
     config::Config,
     entities::{
-        common::ProblemAnswer, problem, study_quiz, study_quiz_problem, study_stage, study_subject,
+        code_video, common::ProblemAnswer, interactive_html, knowledge_explanation,
+        knowledge_video, problem, study_quiz, study_quiz_problem, study_stage, study_subject,
         study_task, user,
     },
 };
@@ -79,30 +80,7 @@ impl TestApp {
         }
     }
 
-    pub async fn request(
-        &self,
-        method: &str,
-        path: &str,
-        token: Option<&str>,
-        body: Option<Value>,
-    ) -> (StatusCode, Value) {
-        let mut request = Request::builder().method(method).uri(path);
-
-        if let Some(token) = token {
-            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
-        }
-
-        if body.is_some() {
-            request = request.header(header::CONTENT_TYPE, "application/json");
-        }
-
-        let request = request
-            .body(match body {
-                Some(body) => Body::from(body.to_string()),
-                None => Body::empty(),
-            })
-            .expect("failed to build request");
-
+    async fn send_request(&self, request: Request<Body>) -> (StatusCode, Value) {
         let response = self
             .app
             .clone()
@@ -120,6 +98,42 @@ impl TestApp {
         let json = serde_json::from_slice(&bytes).expect("response is not valid json");
 
         (status, json)
+    }
+
+    fn build_request(
+        method: &str,
+        path: &str,
+        auth_header: Option<&str>,
+        body: Option<Value>,
+    ) -> Request<Body> {
+        let mut request = Request::builder().method(method).uri(path);
+
+        if let Some(auth) = auth_header {
+            request = request.header(header::AUTHORIZATION, auth);
+        }
+
+        if body.is_some() {
+            request = request.header(header::CONTENT_TYPE, "application/json");
+        }
+
+        request
+            .body(match body {
+                Some(body) => Body::from(body.to_string()),
+                None => Body::empty(),
+            })
+            .expect("failed to build request")
+    }
+
+    pub async fn request(
+        &self,
+        method: &str,
+        path: &str,
+        token: Option<&str>,
+        body: Option<Value>,
+    ) -> (StatusCode, Value) {
+        let auth = token.map(|t| format!("Bearer {t}"));
+        let request = Self::build_request(method, path, auth.as_deref(), body);
+        self.send_request(request).await
     }
 
     pub async fn create_user_and_login(&self, username: &str, password: &str) -> String {
@@ -170,39 +184,8 @@ impl TestApp {
         auth_header: &str,
         body: Option<Value>,
     ) -> (StatusCode, Value) {
-        let mut request = Request::builder()
-            .method(method)
-            .uri(path)
-            .header(header::AUTHORIZATION, auth_header);
-
-        if body.is_some() {
-            request = request.header(header::CONTENT_TYPE, "application/json");
-        }
-
-        let request = request
-            .body(match body {
-                Some(body) => Body::from(body.to_string()),
-                None => Body::empty(),
-            })
-            .expect("failed to build request");
-
-        let response = self
-            .app
-            .clone()
-            .oneshot(request)
-            .await
-            .expect("request failed");
-
-        let status = response.status();
-        let bytes = response
-            .into_body()
-            .collect()
-            .await
-            .expect("failed to read response body")
-            .to_bytes();
-        let json = serde_json::from_slice(&bytes).expect("response is not valid json");
-
-        (status, json)
+        let request = Self::build_request(method, path, Some(auth_header), body);
+        self.send_request(request).await
     }
 
     /// Insert a study subject in Studying status with stages and tasks.
@@ -361,9 +344,7 @@ impl TestApp {
         gold: i32,
         diamond: i32,
     ) {
-        let db = Database::connect(&self.config.database_url)
-            .await
-            .expect("failed to connect test database");
+        let db = self.db().await;
 
         let existing = user::Entity::find()
             .filter(user::Column::Username.eq(username))
@@ -383,5 +364,124 @@ impl TestApp {
             .update(&db)
             .await
             .expect("failed to update user state");
+    }
+
+    pub async fn insert_knowledge_video(
+        &self,
+        user_id: i32,
+        status: knowledge_video::KnowledgeVideoStatus,
+    ) -> i32 {
+        let db = self.db().await;
+        let now = Utc::now();
+        let record = knowledge_video::ActiveModel {
+            user_id: Set(user_id),
+            status: Set(status),
+            prompt: Set("test prompt".to_owned()),
+            url: Set(None),
+            public: Set(false),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert knowledge_video");
+        record.id
+    }
+
+    pub async fn insert_code_video(
+        &self,
+        user_id: i32,
+        status: code_video::CodeVideoStatus,
+    ) -> i32 {
+        let db = self.db().await;
+        let now = Utc::now();
+        let record = code_video::ActiveModel {
+            user_id: Set(user_id),
+            status: Set(status),
+            prompt: Set("test prompt".to_owned()),
+            url: Set(None),
+            public: Set(false),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert code_video");
+        record.id
+    }
+
+    pub async fn insert_interactive_html(
+        &self,
+        user_id: i32,
+        status: interactive_html::InteractiveHtmlStatus,
+    ) -> i32 {
+        let db = self.db().await;
+        let now = Utc::now();
+        let record = interactive_html::ActiveModel {
+            user_id: Set(user_id),
+            status: Set(status),
+            prompt: Set("test prompt".to_owned()),
+            url: Set(None),
+            public: Set(false),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert interactive_html");
+        record.id
+    }
+
+    pub async fn insert_knowledge_explanation(
+        &self,
+        user_id: i32,
+        status: knowledge_explanation::KnowledgeExplanationStatus,
+        cost: i32,
+    ) -> i32 {
+        let db = self.db().await;
+        let now = Utc::now();
+        let record = knowledge_explanation::ActiveModel {
+            user_id: Set(user_id),
+            status: Set(status),
+            prompt: Set("test prompt".to_owned()),
+            content: Set(None),
+            mindmap: Set(None),
+            public: Set(false),
+            cost: Set(cost),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert knowledge_explanation");
+        record.id
+    }
+
+    pub async fn insert_study_subject(
+        &self,
+        user_id: i32,
+        subject: &str,
+        status: study_subject::StudySubjectStatus,
+    ) -> i32 {
+        let db = self.db().await;
+        let now = Utc::now();
+        let record = study_subject::ActiveModel {
+            user_id: Set(user_id),
+            subject: Set(subject.to_owned()),
+            status: Set(status),
+            total_stages: Set(0),
+            finished_stages: Set(0),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert study_subject");
+        record.id
     }
 }

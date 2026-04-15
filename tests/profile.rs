@@ -74,7 +74,7 @@ async fn profile_update_birth_year_only() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["birth_year"], 2005);
-    assert!(body["data"]["gender"].is_null());
+    assert_eq!(body["data"]["gender"], serde_json::Value::Null);
     assert_eq!(body["data"]["introduction"], "");
 }
 
@@ -169,8 +169,8 @@ async fn profile_get_returns_default_values() {
     assert_eq!(body["data"]["diamond"], 0);
     assert_eq!(body["data"]["streak_checkin"], 0);
     assert_eq!(body["data"]["total_checkin"], 0);
-    assert!(body["data"]["birth_year"].is_null());
-    assert!(body["data"]["gender"].is_null());
+    assert_eq!(body["data"]["birth_year"], serde_json::Value::Null);
+    assert_eq!(body["data"]["gender"], serde_json::Value::Null);
     assert_eq!(body["data"]["introduction"], "");
 }
 

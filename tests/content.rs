@@ -1,8 +1,6 @@
 mod common;
 
 use axum::http::StatusCode;
-use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, Database};
 use serde_json::json;
 use zhiying_backend::entities::{
     code_video, interactive_html, knowledge_explanation, knowledge_video,
@@ -16,27 +14,10 @@ async fn internal_callback_updates_knowledge_video_status() {
     let token = app.create_user_and_login("gen_user1", "password123").await;
     let api_key = &app.config.knowledge_video_api_key;
 
-    // Give user some diamonds
     app.update_user_state("gen_user1", None, 0, 0, 100, 50)
         .await;
-
-    // Directly insert a knowledge_video record in QUEUING state
-    let db = Database::connect(&app.config.database_url)
-        .await
-        .expect("connect");
-    knowledge_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(knowledge_video::KnowledgeVideoStatus::Queuing),
-        prompt: Set("test prompt".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_video(1, knowledge_video::KnowledgeVideoStatus::Queuing)
+        .await;
 
     // Callback: QUEUING -> GENERATING
     let (status, body) = app
@@ -76,30 +57,9 @@ async fn internal_callback_failed_triggers_refund() {
     let token = app.create_user_and_login("gen_user2", "password123").await;
     let api_key = &app.config.interactive_html_api_key;
 
-    // Give user some gold
-    app.update_user_state("gen_user2", None, 0, 0, 100, 10)
-        .await;
-
-    // Directly insert an interactive_html record
-    let db = Database::connect(&app.config.database_url)
-        .await
-        .expect("connect");
-    interactive_html::ActiveModel {
-        user_id: Set(1),
-        status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
-        prompt: Set("build a tree".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
-
-    // Deduct the cost manually (simulating what create handler would do)
     app.update_user_state("gen_user2", None, 0, 0, 90, 10).await;
+    app.insert_interactive_html(1, interactive_html::InteractiveHtmlStatus::Queuing)
+        .await;
 
     // QUEUING -> GENERATING
     let (status, _) = app
@@ -134,22 +94,8 @@ async fn internal_callback_invalid_transition_rejected() {
     app.create_user_and_login("gen_user3", "password123").await;
     let api_key = &app.config.code_video_api_key;
 
-    let db = Database::connect(&app.config.database_url)
-        .await
-        .expect("connect");
-    code_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(code_video::CodeVideoStatus::Finished),
-        prompt: Set("test".to_owned()),
-        url: Set(Some("https://example.com/v.mp4".to_owned())),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_code_video(1, code_video::CodeVideoStatus::Finished)
+        .await;
 
     // FINISHED -> GENERATING is invalid
     let (status, body) = app
@@ -169,23 +115,8 @@ async fn internal_callback_wrong_api_key_rejected() {
     let app = TestApp::new().await;
     app.create_user_and_login("gen_user4", "password123").await;
 
-    let db = Database::connect(&app.config.database_url)
-        .await
-        .expect("connect");
-
-    knowledge_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(knowledge_video::KnowledgeVideoStatus::Queuing),
-        prompt: Set("test".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_video(1, knowledge_video::KnowledgeVideoStatus::Queuing)
+        .await;
 
     // Use code_video api_key on knowledge_video endpoint
     let wrong_key = &app.config.code_video_api_key;
@@ -219,25 +150,12 @@ async fn knowledge_explanation_callback_with_content_and_mindmap() {
     let token = app.create_user_and_login("gen_user6", "password123").await;
     let api_key = &app.config.knowledge_explanation_api_key;
 
-    let db = Database::connect(&app.config.database_url)
-        .await
-        .expect("connect");
-
-    knowledge_explanation::ActiveModel {
-        user_id: Set(1),
-        status: Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing),
-        prompt: Set("explain interfaces".to_owned()),
-        content: Set(None),
-        mindmap: Set(None),
-        public: Set(false),
-        cost: Set(10),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_explanation(
+        1,
+        knowledge_explanation::KnowledgeExplanationStatus::Queuing,
+        10,
+    )
+    .await;
 
     // QUEUING -> GENERATING
     let (status, _) = app
@@ -297,21 +215,8 @@ async fn content_get_other_users_code_video_returns_404() {
     let _token_alice = app.create_user_and_login("alice", "password123").await;
     let token_bob = app.create_user_and_login("bob", "password123").await;
 
-    // Insert code_video for alice (user_id=1)
-    let db = app.db().await;
-    code_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(code_video::CodeVideoStatus::Finished),
-        prompt: Set("test".to_owned()),
-        url: Set(Some("https://example.com/v.mp4".to_owned())),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_code_video(1, code_video::CodeVideoStatus::Finished)
+        .await;
 
     // Bob cannot see Alice's code video
     let (status, body) = app
@@ -354,20 +259,8 @@ async fn content_retry_non_failed_knowledge_video_returns_400() {
     let token = app.create_user_and_login("alice", "password123").await;
     app.update_user_state("alice", None, 0, 0, 100, 50).await;
 
-    let db = app.db().await;
-    knowledge_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(knowledge_video::KnowledgeVideoStatus::Finished),
-        prompt: Set("test".to_owned()),
-        url: Set(Some("https://example.com/v.mp4".to_owned())),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_video(1, knowledge_video::KnowledgeVideoStatus::Finished)
+        .await;
 
     let (status, body) = app
         .request(
@@ -386,20 +279,8 @@ async fn content_retry_non_failed_code_video_returns_400() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    code_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(code_video::CodeVideoStatus::Generating),
-        prompt: Set("test".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_code_video(1, code_video::CodeVideoStatus::Generating)
+        .await;
 
     let (status, body) = app
         .request(
@@ -420,21 +301,8 @@ async fn code_video_callback_full_lifecycle() {
     let api_key = &app.config.code_video_api_key;
 
     app.update_user_state("alice", None, 0, 0, 100, 50).await;
-
-    let db = app.db().await;
-    code_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(code_video::CodeVideoStatus::Queuing),
-        prompt: Set("test code video".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_code_video(1, code_video::CodeVideoStatus::Queuing)
+        .await;
 
     // QUEUING -> GENERATING
     let (status, body) = app
@@ -476,21 +344,8 @@ async fn code_video_callback_failed_refunds_diamond() {
 
     // User has 45 diamonds (simulating 5 already deducted for creation)
     app.update_user_state("alice", None, 0, 0, 100, 45).await;
-
-    let db = app.db().await;
-    code_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(code_video::CodeVideoStatus::Queuing),
-        prompt: Set("test".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_code_video(1, code_video::CodeVideoStatus::Queuing)
+        .await;
 
     // QUEUING -> GENERATING
     let (status, _) = app
@@ -526,21 +381,8 @@ async fn interactive_html_callback_full_lifecycle() {
     let api_key = &app.config.interactive_html_api_key;
 
     app.update_user_state("alice", None, 0, 0, 100, 50).await;
-
-    let db = app.db().await;
-    interactive_html::ActiveModel {
-        user_id: Set(1),
-        status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
-        prompt: Set("build an interactive tree".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_interactive_html(1, interactive_html::InteractiveHtmlStatus::Queuing)
+        .await;
 
     // QUEUING -> GENERATING
     let (status, _) = app
@@ -580,23 +422,12 @@ async fn knowledge_explanation_failed_refunds_gold() {
 
     // User has 90 gold (simulating 10 already deducted)
     app.update_user_state("alice", None, 0, 0, 90, 10).await;
-
-    let db = app.db().await;
-    knowledge_explanation::ActiveModel {
-        user_id: Set(1),
-        status: Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing),
-        prompt: Set("explain recursion".to_owned()),
-        content: Set(None),
-        mindmap: Set(None),
-        public: Set(false),
-        cost: Set(10),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_explanation(
+        1,
+        knowledge_explanation::KnowledgeExplanationStatus::Queuing,
+        10,
+    )
+    .await;
 
     // QUEUING -> GENERATING
     let (status, _) = app
@@ -632,20 +463,8 @@ async fn content_retry_failed_kv_insufficient_diamonds_returns_400() {
     // 0 diamonds
     app.update_user_state("alice", None, 0, 0, 100, 0).await;
 
-    let db = app.db().await;
-    knowledge_video::ActiveModel {
-        user_id: Set(1),
-        status: Set(knowledge_video::KnowledgeVideoStatus::Failed),
-        prompt: Set("test".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_video(1, knowledge_video::KnowledgeVideoStatus::Failed)
+        .await;
 
     let (status, body) = app
         .request(
@@ -666,20 +485,8 @@ async fn content_retry_failed_ih_insufficient_gold_returns_400() {
     // 0 gold
     app.update_user_state("alice", None, 0, 0, 0, 50).await;
 
-    let db = app.db().await;
-    interactive_html::ActiveModel {
-        user_id: Set(1),
-        status: Set(interactive_html::InteractiveHtmlStatus::Failed),
-        prompt: Set("test".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_interactive_html(1, interactive_html::InteractiveHtmlStatus::Failed)
+        .await;
 
     let (status, body) = app
         .request(
@@ -700,22 +507,12 @@ async fn content_retry_failed_ke_insufficient_gold_returns_400() {
     // 0 gold
     app.update_user_state("alice", None, 0, 0, 0, 50).await;
 
-    let db = app.db().await;
-    knowledge_explanation::ActiveModel {
-        user_id: Set(1),
-        status: Set(knowledge_explanation::KnowledgeExplanationStatus::Failed),
-        prompt: Set("test".to_owned()),
-        content: Set(None),
-        mindmap: Set(None),
-        public: Set(false),
-        cost: Set(10),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_explanation(
+        1,
+        knowledge_explanation::KnowledgeExplanationStatus::Failed,
+        10,
+    )
+    .await;
 
     let (status, body) = app
         .request(
@@ -734,20 +531,8 @@ async fn content_retry_non_failed_interactive_html_returns_400() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    interactive_html::ActiveModel {
-        user_id: Set(1),
-        status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
-        prompt: Set("test".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_interactive_html(1, interactive_html::InteractiveHtmlStatus::Queuing)
+        .await;
 
     let (status, body) = app
         .request(
@@ -784,22 +569,12 @@ async fn content_set_public_non_owner_returns_404() {
     app.create_user_and_login("alice", "password123").await;
     let token_bob = app.create_user_and_login("bob", "password123").await;
 
-    let db = app.db().await;
-    knowledge_explanation::ActiveModel {
-        user_id: Set(1), // alice
-        status: Set(knowledge_explanation::KnowledgeExplanationStatus::Finished),
-        prompt: Set("test".to_owned()),
-        content: Set(Some("content".to_owned())),
-        mindmap: Set(None),
-        public: Set(false),
-        cost: Set(10),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_knowledge_explanation(
+        1, // alice
+        knowledge_explanation::KnowledgeExplanationStatus::Finished,
+        10,
+    )
+    .await;
 
     // Bob tries to set Alice's content public
     let (status, body) = app
@@ -819,20 +594,8 @@ async fn internal_callback_cross_service_key_on_ih_rejected() {
     let app = TestApp::new().await;
     app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    interactive_html::ActiveModel {
-        user_id: Set(1),
-        status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
-        prompt: Set("test".to_owned()),
-        url: Set(None),
-        public: Set(false),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_interactive_html(1, interactive_html::InteractiveHtmlStatus::Queuing)
+        .await;
 
     // Use knowledge_video key on interactive_html endpoint
     let wrong_key = &app.config.knowledge_video_api_key;

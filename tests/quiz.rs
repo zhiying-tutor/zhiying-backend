@@ -177,7 +177,7 @@ async fn study_quiz_get_detail_with_problems() {
     let problems = body["data"]["problems"].as_array().expect("problems");
     assert_eq!(problems.len(), 2);
     assert_eq!(problems[0]["problem"]["content"], "Q1");
-    assert!(problems[0]["chosen_answer"].is_null());
+    assert_eq!(problems[0]["chosen_answer"], serde_json::Value::Null);
 }
 
 #[tokio::test]

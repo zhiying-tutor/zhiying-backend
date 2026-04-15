@@ -32,22 +32,13 @@ async fn study_subject_list_returns_user_subjects() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    let now = Utc::now();
     for i in 0..2 {
-        study_subject::ActiveModel {
-            user_id: Set(1),
-            subject: Set(format!("Subject {}", i)),
-            status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-            total_stages: Set(0),
-            finished_stages: Set(0),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        }
-        .insert(&db)
-        .await
-        .expect("insert");
+        app.insert_study_subject(
+            1,
+            &format!("Subject {i}"),
+            study_subject::StudySubjectStatus::PretestQueuing,
+        )
+        .await;
     }
 
     let (status, body) = app
@@ -62,6 +53,7 @@ async fn study_subject_get_by_id_works() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
+    // Needs specific total_stages/finished_stages, so use manual insert
     let db = app.db().await;
     let now = Utc::now();
     study_subject::ActiveModel {
@@ -93,21 +85,12 @@ async fn study_subject_get_other_users_returns_404() {
     app.create_user_and_login("alice", "password123").await;
     let token_bob = app.create_user_and_login("bob", "password123").await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1), // alice
-        subject: Set("Secret Subject".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::Studying),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(
+        1, // alice
+        "Secret Subject",
+        study_subject::StudySubjectStatus::Studying,
+    )
+    .await;
 
     let (status, body) = app
         .request("GET", "/api/v1/study-subjects/1", Some(&token_bob), None)
@@ -122,21 +105,8 @@ async fn study_subject_pretest_callback_creates_problems() {
     let token = app.create_user_and_login("alice", "password123").await;
     let api_key = &app.config.pretest_api_key;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Math", study_subject::StudySubjectStatus::PretestQueuing)
+        .await;
 
     // Callback: FINISHED with problems
     let (status, _) = app
@@ -193,21 +163,8 @@ async fn study_subject_pretest_answer_works() {
     let token = app.create_user_and_login("alice", "password123").await;
     let api_key = &app.config.pretest_api_key;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Math", study_subject::StudySubjectStatus::PretestQueuing)
+        .await;
 
     // Create pretest via callback
     app.request(
@@ -264,22 +221,9 @@ async fn study_subject_pretest_answer_not_ready_returns_400() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    let now = Utc::now();
     // Subject still in PretestQueuing
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Math", study_subject::StudySubjectStatus::PretestQueuing)
+        .await;
 
     let (status, body) = app
         .request(
@@ -298,21 +242,8 @@ async fn study_subject_pretest_answer_invalid_problem_returns_404() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestReady),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Math", study_subject::StudySubjectStatus::PretestReady)
+        .await;
 
     let (status, body) = app
         .request(
@@ -331,21 +262,8 @@ async fn study_subject_create_plan_not_ready_returns_400() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Math", study_subject::StudySubjectStatus::PretestQueuing)
+        .await;
 
     let (status, body) = app
         .request("POST", "/api/v1/study-subjects/1/plan", Some(&token), None)
@@ -360,21 +278,8 @@ async fn study_subject_plan_callback_creates_stages_and_tasks() {
     let token = app.create_user_and_login("alice", "password123").await;
     let api_key = &app.config.plan_api_key;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Python".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PlanQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Python", study_subject::StudySubjectStatus::PlanQueuing)
+        .await;
 
     // Plan callback: FINISHED with stages
     let (status, _) = app
@@ -443,21 +348,8 @@ async fn study_subject_plan_callback_failed_refunds_diamond() {
     // User has 40 diamonds (10 already deducted)
     app.update_user_state("alice", None, 0, 0, 0, 40).await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Python".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PlanQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Python", study_subject::StudySubjectStatus::PlanQueuing)
+        .await;
 
     let (status, _) = app
         .request(
@@ -482,21 +374,12 @@ async fn study_subject_pretest_callback_failed_refunds_diamond() {
 
     app.update_user_state("alice", None, 0, 0, 0, 40).await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Python".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(
+        1,
+        "Python",
+        study_subject::StudySubjectStatus::PretestQueuing,
+    )
+    .await;
 
     let (status, _) = app
         .request(
@@ -530,21 +413,8 @@ async fn study_subject_pretest_answer_already_answered_overwrites() {
     let token = app.create_user_and_login("alice", "password123").await;
     let api_key = &app.config.pretest_api_key;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Math", study_subject::StudySubjectStatus::PretestQueuing)
+        .await;
 
     // Create pretest via callback
     app.request(
@@ -631,21 +501,12 @@ async fn study_subject_get_pretest_other_user_returns_404() {
     let token_bob = app.create_user_and_login("bob", "password123").await;
     let api_key = &app.config.pretest_api_key;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1), // alice
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(
+        1, // alice
+        "Math",
+        study_subject::StudySubjectStatus::PretestQueuing,
+    )
+    .await;
 
     // Create pretest
     app.request(
@@ -680,21 +541,8 @@ async fn study_subject_callback_wrong_service_key_rejected() {
     let app = TestApp::new().await;
     app.create_user_and_login("alice", "password123").await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Math".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    app.insert_study_subject(1, "Math", study_subject::StudySubjectStatus::PretestQueuing)
+        .await;
 
     // Use quiz key on study-subjects callback
     let wrong_key = &app.config.quiz_api_key;
