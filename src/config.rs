@@ -55,12 +55,12 @@ impl Config {
             .map_err(|_| AppError::internal("APP_HOST is invalid"))?;
 
         let port = env::var("APP_PORT")
-            .unwrap_or_else(|_| "3000".to_owned())
+            .unwrap_or_else(|_| "9000".to_owned())
             .parse()
             .map_err(|_| AppError::internal("APP_PORT is invalid"))?;
 
-        let database_url = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "sqlite://./zhiying.db?mode=rwc".to_owned());
+        let database_url =
+            env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://zhiying.db?mode=rwc".to_owned());
 
         let jwt_secret =
             env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_owned());
