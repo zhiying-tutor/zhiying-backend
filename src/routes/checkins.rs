@@ -40,8 +40,8 @@ pub struct CheckinResponse {
     makeup_days: i64,
     diamond_cost: i32,
     gold_cost: i32,
-    total_checkin: i32,
-    streak_checkin: i32,
+    total_checkins: i32,
+    streak_checkins: i32,
 }
 
 pub async fn check_in(
@@ -85,7 +85,7 @@ pub async fn check_in(
 
     if makeup_applied {
         if let Some(last_checkin) = existing_user.last_checkin {
-            let reward_start_day = existing_user.streak_checkin + 1;
+            let reward_start_day = existing_user.streak_checkins + 1;
             for (index, missed_date) in makeup_dates(last_checkin, today).into_iter().enumerate() {
                 let streak_day = reward_start_day
                     + i32::try_from(index)
@@ -110,17 +110,17 @@ pub async fn check_in(
     let streak = if makeup_applied {
         let missed_days = i32::try_from(missed_days)
             .map_err(|_| AppError::internal("missed_days overflowed i32"))?;
-        existing_user.streak_checkin + missed_days + 1
+        existing_user.streak_checkins + missed_days + 1
     } else {
         next_streak(
             existing_user.last_checkin,
             today,
-            existing_user.streak_checkin,
+            existing_user.streak_checkins,
         )
     };
     let gold_reward = if makeup_applied {
         reward_sum_for_streak_range(
-            existing_user.streak_checkin + 1,
+            existing_user.streak_checkins + 1,
             streak,
             &state.config.checkin_reward_sequence,
         )
@@ -152,8 +152,8 @@ pub async fn check_in(
 
     active_user.gold = Set(existing_user.gold + gold_reward - gold_cost);
     active_user.diamond = Set(existing_user.diamond - diamond_cost);
-    active_user.total_checkin = Set(existing_user.total_checkin + added_checkins + 1);
-    active_user.streak_checkin = Set(streak);
+    active_user.total_checkins = Set(existing_user.total_checkins + added_checkins + 1);
+    active_user.streak_checkins = Set(streak);
     active_user.last_checkin = Set(Some(today));
     active_user.updated_at = Set(now);
     active_user.update(&tx).await?;
@@ -167,8 +167,8 @@ pub async fn check_in(
         makeup_days: if makeup_applied { missed_days } else { 0 },
         diamond_cost,
         gold_cost,
-        total_checkin: existing_user.total_checkin + added_checkins + 1,
-        streak_checkin: streak,
+        total_checkins: existing_user.total_checkins + added_checkins + 1,
+        streak_checkins: streak,
     }))
 }
 

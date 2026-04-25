@@ -339,8 +339,8 @@ impl TestApp {
         &self,
         username: &str,
         last_checkin: Option<chrono::NaiveDate>,
-        streak_checkin: i32,
-        total_checkin: i32,
+        streak_checkins: i32,
+        total_checkins: i32,
         gold: i32,
         diamond: i32,
     ) {
@@ -355,8 +355,8 @@ impl TestApp {
 
         let mut active_user: user::ActiveModel = existing.into();
         active_user.last_checkin = Set(last_checkin);
-        active_user.streak_checkin = Set(streak_checkin);
-        active_user.total_checkin = Set(total_checkin);
+        active_user.streak_checkins = Set(streak_checkins);
+        active_user.total_checkins = Set(total_checkins);
         active_user.gold = Set(gold);
         active_user.diamond = Set(diamond);
         active_user.updated_at = Set(Utc::now());

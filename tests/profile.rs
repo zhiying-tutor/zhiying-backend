@@ -167,8 +167,8 @@ async fn profile_get_returns_default_values() {
     assert_eq!(body["data"]["username"], "alice");
     assert_eq!(body["data"]["gold"], 0);
     assert_eq!(body["data"]["diamond"], 0);
-    assert_eq!(body["data"]["streak_checkin"], 0);
-    assert_eq!(body["data"]["total_checkin"], 0);
+    assert_eq!(body["data"]["streak_checkins"], 0);
+    assert_eq!(body["data"]["total_checkins"], 0);
     assert_eq!(body["data"]["birth_year"], serde_json::Value::Null);
     assert_eq!(body["data"]["gender"], serde_json::Value::Null);
     assert_eq!(body["data"]["introduction"], "");

@@ -44,6 +44,11 @@
 - 当前用户资源统一使用 `me`，不要再引入 `self` 命名。
 - 新增路由时，优先新增同名资源文件，而不是继续往已有无关模块中堆积。
 
+## 命名约定
+
+- 表示数量、计数、累计值的字段统一使用复数名词，例如 `total_checkins`、`streak_checkins`、`total_stages`、`finished_tasks`。不要使用单数形式（如 `total_checkin`）作为计数字段名。
+- 该规则同时适用于实体字段、API 响应字段、测试断言中的 JSON key，以保持端到端一致。
+
 ## 数据库约定
 
 - 不要把实现写死在 PostgreSQL 方言上。

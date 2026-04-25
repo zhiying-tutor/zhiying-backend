@@ -18,8 +18,8 @@ async fn checkin_basic_flow_and_repeat_guard_work() {
     assert_eq!(checkin_status, StatusCode::CREATED);
     assert_eq!(checkin_body["data"]["gold_reward"], 1);
     assert_eq!(checkin_body["data"]["makeup_applied"], false);
-    assert_eq!(checkin_body["data"]["total_checkin"], 1);
-    assert_eq!(checkin_body["data"]["streak_checkin"], 1);
+    assert_eq!(checkin_body["data"]["total_checkins"], 1);
+    assert_eq!(checkin_body["data"]["streak_checkins"], 1);
 
     let (list_status, list_body) = app
         .request("GET", "/api/v1/checkins?limit=10", Some(&token), None)
@@ -58,8 +58,8 @@ async fn checkin_without_makeup_resets_streak_after_gap() {
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["data"]["makeup_applied"], false);
     assert_eq!(body["data"]["gold_reward"], 1);
-    assert_eq!(body["data"]["streak_checkin"], 1);
-    assert_eq!(body["data"]["total_checkin"], 4);
+    assert_eq!(body["data"]["streak_checkins"], 1);
+    assert_eq!(body["data"]["total_checkins"], 4);
 }
 
 #[tokio::test]
@@ -86,16 +86,16 @@ async fn checkin_makeup_updates_rewards_and_costs() {
     assert_eq!(body["data"]["gold_cost"], 20);
     assert_eq!(body["data"]["diamond_cost"], 1);
     assert_eq!(body["data"]["gold_reward"], 12);
-    assert_eq!(body["data"]["streak_checkin"], 5);
-    assert_eq!(body["data"]["total_checkin"], 5);
+    assert_eq!(body["data"]["streak_checkins"], 5);
+    assert_eq!(body["data"]["total_checkins"], 5);
 
     let (me_status, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
 
     assert_eq!(me_status, StatusCode::OK);
     assert_eq!(me_body["data"]["gold"], 92);
     assert_eq!(me_body["data"]["diamond"], 4);
-    assert_eq!(me_body["data"]["streak_checkin"], 5);
-    assert_eq!(me_body["data"]["total_checkin"], 5);
+    assert_eq!(me_body["data"]["streak_checkins"], 5);
+    assert_eq!(me_body["data"]["total_checkins"], 5);
 
     let (list_status, list_body) = app
         .request("GET", "/api/v1/checkins?limit=10", Some(&token), None)
@@ -170,8 +170,8 @@ async fn checkin_makeup_false_with_gap_resets_streak() {
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["data"]["makeup_applied"], false);
-    assert_eq!(body["data"]["streak_checkin"], 1);
-    assert_eq!(body["data"]["total_checkin"], 11);
+    assert_eq!(body["data"]["streak_checkins"], 1);
+    assert_eq!(body["data"]["total_checkins"], 11);
     assert_eq!(body["data"]["gold_reward"], 1);
 }
 
@@ -200,7 +200,7 @@ async fn checkin_no_gap_makeup_ignored() {
     assert_eq!(body["data"]["makeup_days"], 0);
     assert_eq!(body["data"]["gold_cost"], 0);
     assert_eq!(body["data"]["diamond_cost"], 0);
-    assert_eq!(body["data"]["streak_checkin"], 4);
+    assert_eq!(body["data"]["streak_checkins"], 4);
     assert_eq!(body["data"]["gold_reward"], 4);
 
     // Balance should not be deducted
