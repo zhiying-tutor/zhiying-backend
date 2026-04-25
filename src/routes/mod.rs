@@ -7,6 +7,7 @@ mod knowledge_videos;
 mod me;
 mod placeholders;
 mod problems;
+mod public_config;
 mod study_quizzes;
 mod study_stages;
 mod study_subjects;
@@ -53,6 +54,7 @@ pub fn build_router(state: AppState) -> Router {
 
 fn api_router() -> Router<AppState> {
     Router::new()
+        .route("/config", get(public_config::get_config))
         .route("/users", axum::routing::post(users::create_user))
         .route("/tokens", axum::routing::post(tokens::create_token))
         .route("/me", get(me::get_me).patch(me::update_me))

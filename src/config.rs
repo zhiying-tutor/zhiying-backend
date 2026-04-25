@@ -1,4 +1,4 @@
-use std::{env, net::IpAddr};
+use std::{collections::BTreeMap, env, net::IpAddr};
 
 use crate::error::AppError;
 
@@ -32,8 +32,8 @@ pub struct Config {
     pub interactive_html_api_key: String,
     pub knowledge_explanation_api_key: String,
 
-    // Study subject
-    pub study_subject_diamond_cost: i32,
+    // Study subject: total_stages → diamond_cost
+    pub study_subject_diamond_costs: BTreeMap<i32, i32>,
     pub pretest_service_url: String,
     pub pretest_api_key: String,
     pub plan_service_url: String,
@@ -134,10 +134,10 @@ impl Config {
         let knowledge_explanation_api_key = env::var("KNOWLEDGE_EXPLANATION_API_KEY")
             .unwrap_or_else(|_| "sk-knowledge-explanation-dev".to_owned());
 
-        let study_subject_diamond_cost = env::var("STUDY_SUBJECT_DIAMOND_COST")
-            .unwrap_or_else(|_| "10".to_owned())
-            .parse()
-            .map_err(|_| AppError::internal("STUDY_SUBJECT_DIAMOND_COST is invalid"))?;
+        let study_subject_diamond_costs = parse_study_subject_diamond_costs(
+            &env::var("STUDY_SUBJECT_DIAMOND_COSTS")
+                .unwrap_or_else(|_| "3:10,7:20,15:40,30:80".to_owned()),
+        )?;
 
         let pretest_service_url =
             env::var("PRETEST_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8010".to_owned());
@@ -187,7 +187,7 @@ impl Config {
             code_video_api_key,
             interactive_html_api_key,
             knowledge_explanation_api_key,
-            study_subject_diamond_cost,
+            study_subject_diamond_costs,
             pretest_service_url,
             pretest_api_key,
             plan_service_url,
@@ -198,5 +198,87 @@ impl Config {
             study_quiz_extra_gold_cost,
             recharge_api_key,
         })
+    }
+}
+
+fn parse_study_subject_diamond_costs(raw: &str) -> Result<BTreeMap<i32, i32>, AppError> {
+    let mut map = BTreeMap::new();
+    for entry in raw.split(',') {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let (key, value) = entry
+            .split_once(':')
+            .ok_or_else(|| AppError::internal("STUDY_SUBJECT_DIAMOND_COSTS is invalid"))?;
+        let key: i32 = key
+            .trim()
+            .parse()
+            .map_err(|_| AppError::internal("STUDY_SUBJECT_DIAMOND_COSTS is invalid"))?;
+        let value: i32 = value
+            .trim()
+            .parse()
+            .map_err(|_| AppError::internal("STUDY_SUBJECT_DIAMOND_COSTS is invalid"))?;
+        if key <= 0 || value <= 0 {
+            return Err(AppError::internal(
+                "STUDY_SUBJECT_DIAMOND_COSTS must contain positive numbers",
+            ));
+        }
+        if map.insert(key, value).is_some() {
+            return Err(AppError::internal(
+                "STUDY_SUBJECT_DIAMOND_COSTS contains duplicate total_stages",
+            ));
+        }
+    }
+    if map.is_empty() {
+        return Err(AppError::internal("STUDY_SUBJECT_DIAMOND_COSTS is empty"));
+    }
+    Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_study_subject_diamond_costs;
+
+    #[test]
+    fn parses_default_value() {
+        let map = parse_study_subject_diamond_costs("3:10,7:20,15:40,30:80").unwrap();
+        assert_eq!(map.len(), 4);
+        assert_eq!(map[&3], 10);
+        assert_eq!(map[&30], 80);
+        let keys: Vec<_> = map.keys().copied().collect();
+        assert_eq!(keys, vec![3, 7, 15, 30]);
+    }
+
+    #[test]
+    fn parses_custom_value_ignoring_whitespace() {
+        let map = parse_study_subject_diamond_costs("  5 : 12 , 9: 24 ").unwrap();
+        assert_eq!(map[&5], 12);
+        assert_eq!(map[&9], 24);
+    }
+
+    #[test]
+    fn rejects_duplicate_keys() {
+        assert!(parse_study_subject_diamond_costs("3:10,3:20").is_err());
+    }
+
+    #[test]
+    fn rejects_non_positive() {
+        assert!(parse_study_subject_diamond_costs("0:10").is_err());
+        assert!(parse_study_subject_diamond_costs("3:0").is_err());
+        assert!(parse_study_subject_diamond_costs("-3:10").is_err());
+    }
+
+    #[test]
+    fn rejects_non_numeric() {
+        assert!(parse_study_subject_diamond_costs("a:10").is_err());
+        assert!(parse_study_subject_diamond_costs("3:b").is_err());
+        assert!(parse_study_subject_diamond_costs("3-10").is_err());
+    }
+
+    #[test]
+    fn rejects_empty() {
+        assert!(parse_study_subject_diamond_costs("").is_err());
+        assert!(parse_study_subject_diamond_costs(" , ").is_err());
     }
 }

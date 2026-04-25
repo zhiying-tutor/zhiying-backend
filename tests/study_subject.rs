@@ -12,7 +12,7 @@ use common::TestApp;
 async fn study_subject_create_insufficient_diamonds_returns_400() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
-    // User has 5 diamonds, cost is 10
+    // User has 5 diamonds, total_stages=3 costs 10
     app.update_user_state("alice", None, 0, 0, 0, 5).await;
 
     let (status, body) = app
@@ -20,11 +20,25 @@ async fn study_subject_create_insufficient_diamonds_returns_400() {
             "POST",
             "/api/v1/study-subjects",
             Some(&token),
-            Some(json!({"subject": "Python basics"})),
+            Some(json!({
+                "subject": "Python basics",
+                "total_stages": 3,
+                "language": "PYTHON",
+                "target": ""
+            })),
         )
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INSUFFICIENT_DIAMONDS");
+
+    // Diamond unchanged and no study_subject was created
+    let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
+    assert_eq!(me_body["data"]["diamond"], 5);
+
+    let (_, list_body) = app
+        .request("GET", "/api/v1/study-subjects", Some(&token), None)
+        .await;
+    assert_eq!(list_body["data"].as_array().map(Vec::len), Some(0));
 }
 
 #[tokio::test]
@@ -62,6 +76,9 @@ async fn study_subject_get_by_id_works() {
         status: Set(study_subject::StudySubjectStatus::Studying),
         total_stages: Set(3),
         finished_stages: Set(1),
+        diamond_cost: Set(10),
+        language: Set("PYTHON".to_owned()),
+        target: Set(String::new()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
@@ -278,8 +295,25 @@ async fn study_subject_plan_callback_creates_stages_and_tasks() {
     let token = app.create_user_and_login("alice", "password123").await;
     let api_key = &app.config.plan_api_key;
 
-    app.insert_study_subject(1, "Python", study_subject::StudySubjectStatus::PlanQueuing)
-        .await;
+    // Subject was created with total_stages=2 (user-selected, plan must match)
+    let db = app.db().await;
+    let now = Utc::now();
+    study_subject::ActiveModel {
+        user_id: Set(1),
+        subject: Set("Python".to_owned()),
+        status: Set(study_subject::StudySubjectStatus::PlanQueuing),
+        total_stages: Set(2),
+        finished_stages: Set(0),
+        diamond_cost: Set(10),
+        language: Set("PYTHON".to_owned()),
+        target: Set(String::new()),
+        created_at: Set(now),
+        updated_at: Set(now),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .expect("insert");
 
     // Plan callback: FINISHED with stages
     let (status, _) = app
@@ -573,4 +607,133 @@ async fn study_subject_callback_nonexistent_returns_404() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["code"], "STUDY_SUBJECT_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn public_config_returns_pricing_in_ascending_order() {
+    let app = TestApp::new().await;
+
+    let (status, body) = app.request("GET", "/api/v1/config", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let pricing = body["data"]["study_subject"]["pricing"]
+        .as_array()
+        .expect("pricing array");
+    assert_eq!(pricing.len(), 4);
+    assert_eq!(pricing[0]["total_stages"], 3);
+    assert_eq!(pricing[0]["diamond_cost"], 10);
+    assert_eq!(pricing[1]["total_stages"], 7);
+    assert_eq!(pricing[1]["diamond_cost"], 20);
+    assert_eq!(pricing[2]["total_stages"], 15);
+    assert_eq!(pricing[2]["diamond_cost"], 40);
+    assert_eq!(pricing[3]["total_stages"], 30);
+    assert_eq!(pricing[3]["diamond_cost"], 80);
+}
+
+#[tokio::test]
+async fn study_subject_create_with_total_stages_seven_charges_twenty_diamonds() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.update_user_state("alice", None, 0, 0, 0, 100).await;
+
+    // Pretest microservice is not running in tests, so the create handler will
+    // deduct diamonds, persist the subject, then refund on dispatch failure.
+    // We verify the persisted fields match the requested pricing/inputs.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/v1/study-subjects",
+            Some(&token),
+            Some(json!({
+                "subject": "Rust 进阶",
+                "total_stages": 7,
+                "language": "RUST",
+                "target": "能独立写一个 web 服务"
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+
+    // Diamond was deducted (-20) then refunded (+20) → 100
+    let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
+    assert_eq!(me_body["data"]["diamond"], 100);
+
+    let (_, list_body) = app
+        .request("GET", "/api/v1/study-subjects", Some(&token), None)
+        .await;
+    let items = list_body["data"].as_array().expect("array");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["total_stages"], 7);
+    assert_eq!(items[0]["diamond_cost"], 20);
+    assert_eq!(items[0]["language"], "RUST");
+    assert_eq!(items[0]["target"], "能独立写一个 web 服务");
+    assert_eq!(items[0]["subject"], "Rust 进阶");
+    assert_eq!(items[0]["status"], "Failed");
+}
+
+#[tokio::test]
+async fn study_subject_create_invalid_total_stages_returns_invalid_study_stages() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.update_user_state("alice", None, 0, 0, 0, 100).await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/v1/study-subjects",
+            Some(&token),
+            Some(json!({
+                "subject": "Java",
+                "total_stages": 99,
+                "language": "JAVA",
+                "target": ""
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["code"], "INVALID_STUDY_STAGES");
+
+    // Diamonds untouched, no record persisted
+    let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
+    assert_eq!(me_body["data"]["diamond"], 100);
+    let (_, list_body) = app
+        .request("GET", "/api/v1/study-subjects", Some(&token), None)
+        .await;
+    assert_eq!(list_body["data"].as_array().map(Vec::len), Some(0));
+}
+
+#[tokio::test]
+async fn study_subject_create_missing_total_stages_returns_validation_failed() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.update_user_state("alice", None, 0, 0, 0, 100).await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/v1/study-subjects",
+            Some(&token),
+            Some(json!({"subject": "Python", "language": "PYTHON"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "VALIDATION_FAILED");
+}
+
+#[tokio::test]
+async fn study_subject_create_missing_language_returns_validation_failed() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.update_user_state("alice", None, 0, 0, 0, 100).await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/v1/study-subjects",
+            Some(&token),
+            Some(json!({"subject": "Python", "total_stages": 3})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "VALIDATION_FAILED");
 }

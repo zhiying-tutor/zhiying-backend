@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 
 use axum::{
@@ -58,7 +59,7 @@ impl TestApp {
             code_video_api_key: "sk-test-code-video".to_owned(),
             interactive_html_api_key: "sk-test-interactive-html".to_owned(),
             knowledge_explanation_api_key: "sk-test-knowledge-explanation".to_owned(),
-            study_subject_diamond_cost: 10,
+            study_subject_diamond_costs: BTreeMap::from([(3, 10), (7, 20), (15, 40), (30, 80)]),
             pretest_service_url: "http://localhost:9010".to_owned(),
             pretest_api_key: "sk-test-pretest".to_owned(),
             plan_service_url: "http://localhost:9011".to_owned(),
@@ -205,6 +206,9 @@ impl TestApp {
             status: Set(study_subject::StudySubjectStatus::Studying),
             total_stages: Set(num_stages as i32),
             finished_stages: Set(0),
+            diamond_cost: Set(0),
+            language: Set("PYTHON".to_owned()),
+            target: Set(String::new()),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -475,6 +479,9 @@ impl TestApp {
             status: Set(status),
             total_stages: Set(0),
             finished_stages: Set(0),
+            diamond_cost: Set(10),
+            language: Set("PYTHON".to_owned()),
+            target: Set(String::new()),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()

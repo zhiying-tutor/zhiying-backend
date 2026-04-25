@@ -37,6 +37,7 @@ pub enum BusinessError {
     TaskNotFound,
     QuizNotFound,
     StudyQuizProblemNotFound,
+    InvalidStudyStages,
 }
 
 impl BusinessError {
@@ -66,6 +67,7 @@ impl BusinessError {
             Self::TaskNotFound => "TASK_NOT_FOUND",
             Self::QuizNotFound => "QUIZ_NOT_FOUND",
             Self::StudyQuizProblemNotFound => "STUDY_QUIZ_PROBLEM_NOT_FOUND",
+            Self::InvalidStudyStages => "INVALID_STUDY_STAGES",
         }
     }
 
@@ -95,6 +97,7 @@ impl BusinessError {
             Self::TaskNotFound => "学习任务不存在",
             Self::QuizNotFound => "小测不存在",
             Self::StudyQuizProblemNotFound => "小测题目不存在",
+            Self::InvalidStudyStages => "不支持的学习阶段数",
         }
     }
 
@@ -123,6 +126,7 @@ impl BusinessError {
             | Self::InvalidStudyTaskStatus
             | Self::InvalidStudyQuizStatus
             | Self::IncompleteQuizAnswers => StatusCode::BAD_REQUEST,
+            Self::InvalidStudyStages => StatusCode::UNPROCESSABLE_ENTITY,
         }
     }
 }

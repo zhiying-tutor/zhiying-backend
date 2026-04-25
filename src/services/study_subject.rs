@@ -7,12 +7,18 @@ use crate::error::{AppError, BusinessError};
 pub struct PretestRequest {
     pub task_id: i32,
     pub prompt: String,
+    pub total_stages: i32,
+    pub language: String,
+    pub target: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct PlanRequest {
     pub task_id: i32,
     pub prompt: String,
+    pub total_stages: i32,
+    pub language: String,
+    pub target: String,
     pub pretest_results: Vec<PretestResult>,
 }
 

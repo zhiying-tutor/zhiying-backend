@@ -424,7 +424,7 @@ async fn callback_study_subject(
 
     // Handle FAILED → refund
     if new_status == StudySubjectStatus::Failed {
-        let cost = state.config.study_subject_diamond_cost;
+        let cost = subject.diamond_cost;
         let existing_user = user::Entity::find_by_id(subject.user_id)
             .one(&tx)
             .await?
@@ -478,9 +478,6 @@ async fn callback_study_subject(
         let stages = payload
             .stages
             .ok_or_else(|| AppError::internal("plan FINISHED callback missing stages data"))?;
-
-        let total_stages = stages.len() as i32;
-        active.total_stages = Set(total_stages);
 
         for (si, s) in stages.into_iter().enumerate() {
             let is_first_stage = si == 0;

@@ -131,6 +131,9 @@ async fn problems_list_wrong_filter() {
         status: Set(study_subject::StudySubjectStatus::PretestReady),
         total_stages: Set(0),
         finished_stages: Set(0),
+        diamond_cost: Set(0),
+        language: Set("PYTHON".to_owned()),
+        target: Set(String::new()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()

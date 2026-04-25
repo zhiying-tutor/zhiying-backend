@@ -37,6 +37,10 @@ pub struct Model {
     pub status: StudySubjectStatus,
     pub total_stages: i32,
     pub finished_stages: i32,
+    pub diamond_cost: i32,
+    pub language: String,
+    #[sea_orm(column_type = "Text")]
+    pub target: String,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }

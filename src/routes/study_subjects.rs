@@ -8,6 +8,7 @@ use sea_orm::{
     TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 use crate::{
     auth::AuthUser,
@@ -23,6 +24,8 @@ use crate::{
     state::AppState,
 };
 
+const ALLOWED_LANGUAGES: &[&str] = &["PYTHON", "JAVA", "CPP", "GO", "RUST"];
+
 // ── Views ──
 
 #[derive(Debug, Serialize)]
@@ -32,6 +35,9 @@ pub struct StudySubjectView {
     pub status: StudySubjectStatus,
     pub total_stages: i32,
     pub finished_stages: i32,
+    pub diamond_cost: i32,
+    pub language: String,
+    pub target: String,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -44,6 +50,9 @@ impl From<study_subject::Model> for StudySubjectView {
             status: m.status,
             total_stages: m.total_stages,
             finished_stages: m.finished_stages,
+            diamond_cost: m.diamond_cost,
+            language: m.language,
+            target: m.target,
             created_at: m.created_at.timestamp_millis(),
             updated_at: m.updated_at.timestamp_millis(),
         }
@@ -74,9 +83,15 @@ pub struct ProblemView {
 
 // ── Payloads ──
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CreateRequest {
-    pub subject: String,
+    #[validate(length(min = 1, max = 200))]
+    pub subject: Option<String>,
+    pub total_stages: Option<i32>,
+    pub language: Option<String>,
+    #[serde(default)]
+    #[validate(length(max = 2000))]
+    pub target: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,8 +108,41 @@ pub async fn create(
     auth_user: AuthUser,
     Json(payload): Json<CreateRequest>,
 ) -> Result<impl axum::response::IntoResponse, AppError> {
+    payload.validate()?;
+
+    let subject_text = payload
+        .subject
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or(AppError::ValidationFailed)?
+        .to_owned();
+    let raw_language = payload
+        .language
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or(AppError::ValidationFailed)?;
+    let language = raw_language.to_ascii_uppercase();
+    if !ALLOWED_LANGUAGES.contains(&language.as_str()) {
+        return Err(AppError::ValidationFailed);
+    }
+    let total_stages = payload.total_stages.ok_or(AppError::ValidationFailed)?;
+    let target = payload
+        .target
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_owned();
+
+    let cost = state
+        .config
+        .study_subject_diamond_costs
+        .get(&total_stages)
+        .copied()
+        .ok_or_else(|| AppError::business(BusinessError::InvalidStudyStages))?;
+
     let now = Utc::now();
-    let cost = state.config.study_subject_diamond_cost;
     let tx = state.db.begin().await?;
 
     let existing_user = user::Entity::find_by_id(auth_user.user_id)
@@ -113,10 +161,13 @@ pub async fn create(
 
     let record = study_subject::ActiveModel {
         user_id: Set(auth_user.user_id),
-        subject: Set(payload.subject.clone()),
+        subject: Set(subject_text.clone()),
         status: Set(StudySubjectStatus::PretestQueuing),
-        total_stages: Set(0),
+        total_stages: Set(total_stages),
         finished_stages: Set(0),
+        diamond_cost: Set(cost),
+        language: Set(language.clone()),
+        target: Set(target.clone()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
@@ -128,7 +179,10 @@ pub async fn create(
 
     let request = PretestRequest {
         task_id: record.id,
-        prompt: payload.subject,
+        prompt: subject_text,
+        total_stages,
+        language,
+        target,
     };
     if let Err(err) = dispatch_pretest(
         &state.http_client,
@@ -337,6 +391,9 @@ pub async fn create_plan(
     let request = PlanRequest {
         task_id: subject.id,
         prompt: subject.subject.clone(),
+        total_stages: subject.total_stages,
+        language: subject.language.clone(),
+        target: subject.target.clone(),
         pretest_results,
     };
 
@@ -355,7 +412,7 @@ pub async fn create_plan(
         active.updated_at = Set(Utc::now());
         active.update(&tx).await?;
 
-        let cost = state.config.study_subject_diamond_cost;
+        let cost = subject.diamond_cost;
         let refund_user = user::Entity::find_by_id(auth_user.user_id)
             .one(&tx)
             .await?
