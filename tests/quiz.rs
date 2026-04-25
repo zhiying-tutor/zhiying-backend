@@ -4,6 +4,10 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde_json::json;
+use wiremock::{
+    Mock, ResponseTemplate,
+    matchers::{body_partial_json, header, method, path},
+};
 use zhiying_backend::entities::{common::ProblemAnswer, problem, study_quiz, study_quiz_problem};
 
 use common::TestApp;
@@ -729,4 +733,39 @@ async fn study_quiz_create_exactly_at_free_limit() {
         .await;
     // The dispatch will fail (no service), but the error should NOT be INSUFFICIENT_GOLD
     assert_ne!(body["code"], "INSUFFICIENT_GOLD");
+}
+
+#[tokio::test]
+async fn study_quiz_create_dispatch_payload_contains_task_id_and_prompt() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
+
+    Mock::given(method("POST"))
+        .and(path("/quiz"))
+        .and(header(
+            "Authorization",
+            format!("Bearer {}", app.config.quiz_api_key),
+        ))
+        .and(body_partial_json(json!({
+            "task_id": 1,
+            "prompt": "quiz payload"
+        })))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.mock)
+        .await;
+
+    let (status, body) = app
+        .request(
+            "POST",
+            &format!("/api/v1/study-tasks/{}/quizzes", task_ids[0][0]),
+            Some(&token),
+            Some(json!({"prompt": "quiz payload"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(body["data"]["quiz_id"], 1);
+    assert_eq!(body["data"]["cost"], 0);
 }

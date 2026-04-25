@@ -17,7 +17,12 @@ use sea_orm::{
 use serde_json::Value;
 use tempfile::TempDir;
 use tower::util::ServiceExt;
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{header, method, path},
+};
 use zhiying_backend::{
+    auth::ServiceKind,
     build_app,
     config::Config,
     entities::{
@@ -30,6 +35,7 @@ use zhiying_backend::{
 pub struct TestApp {
     pub app: Router,
     pub config: Config,
+    pub mock: MockServer,
     pub _temp_dir: TempDir,
 }
 
@@ -37,6 +43,8 @@ impl TestApp {
     pub async fn new() -> Self {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let database_path = temp_dir.path().join("test.db");
+        let mock = MockServer::start().await;
+        let mock_uri = mock.uri();
         let config = Config {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 3000,
@@ -51,20 +59,20 @@ impl TestApp {
             code_video_diamond_cost: 5,
             interactive_html_gold_cost: 10,
             knowledge_explanation_gold_cost: 10,
-            knowledge_video_service_url: "http://localhost:9001".to_owned(),
-            code_video_service_url: "http://localhost:9002".to_owned(),
-            interactive_html_service_url: "http://localhost:9003".to_owned(),
-            knowledge_explanation_service_url: "http://localhost:9004".to_owned(),
+            knowledge_video_service_url: format!("{mock_uri}/knowledge-videos"),
+            code_video_service_url: format!("{mock_uri}/code-videos"),
+            interactive_html_service_url: format!("{mock_uri}/interactive-htmls"),
+            knowledge_explanation_service_url: format!("{mock_uri}/knowledge-explanations"),
             knowledge_video_api_key: "sk-test-knowledge-video".to_owned(),
             code_video_api_key: "sk-test-code-video".to_owned(),
             interactive_html_api_key: "sk-test-interactive-html".to_owned(),
             knowledge_explanation_api_key: "sk-test-knowledge-explanation".to_owned(),
             study_subject_diamond_costs: BTreeMap::from([(3, 10), (7, 20), (15, 40), (30, 80)]),
-            pretest_service_url: "http://localhost:9010".to_owned(),
+            pretest_service_url: format!("{mock_uri}/pretest"),
             pretest_api_key: "sk-test-pretest".to_owned(),
-            plan_service_url: "http://localhost:9011".to_owned(),
+            plan_service_url: format!("{mock_uri}/plan"),
             plan_api_key: "sk-test-plan".to_owned(),
-            quiz_service_url: "http://localhost:9012".to_owned(),
+            quiz_service_url: format!("{mock_uri}/quiz"),
             quiz_api_key: "sk-test-quiz".to_owned(),
             study_quiz_free_limit_per_task: 3,
             study_quiz_extra_gold_cost: 20,
@@ -77,8 +85,57 @@ impl TestApp {
         Self {
             app,
             config,
+            mock,
             _temp_dir: temp_dir,
         }
+    }
+
+    pub async fn mock_pretest_ok(&self) {
+        self.mock_microservice_ok("/pretest", &self.config.pretest_api_key)
+            .await;
+    }
+
+    pub async fn mock_plan_ok(&self) {
+        self.mock_microservice_ok("/plan", &self.config.plan_api_key)
+            .await;
+    }
+
+    pub async fn mock_quiz_ok(&self) {
+        self.mock_microservice_ok("/quiz", &self.config.quiz_api_key)
+            .await;
+    }
+
+    pub async fn mock_content_generation_ok(&self, service: ServiceKind) {
+        let (service_path, api_key) = match service {
+            ServiceKind::KnowledgeVideo => (
+                "/knowledge-videos/generate",
+                self.config.knowledge_video_api_key.as_str(),
+            ),
+            ServiceKind::CodeVideo => (
+                "/code-videos/generate",
+                self.config.code_video_api_key.as_str(),
+            ),
+            ServiceKind::InteractiveHtml => (
+                "/interactive-htmls/generate",
+                self.config.interactive_html_api_key.as_str(),
+            ),
+            ServiceKind::KnowledgeExplanation => (
+                "/knowledge-explanations/generate",
+                self.config.knowledge_explanation_api_key.as_str(),
+            ),
+            _ => panic!("unsupported content generation service kind"),
+        };
+
+        self.mock_microservice_ok(service_path, api_key).await;
+    }
+
+    async fn mock_microservice_ok(&self, service_path: &str, api_key: &str) {
+        Mock::given(method("POST"))
+            .and(path(service_path))
+            .and(header("Authorization", format!("Bearer {api_key}")))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&self.mock)
+            .await;
     }
 
     async fn send_request(&self, request: Request<Body>) -> (StatusCode, Value) {

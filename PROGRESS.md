@@ -1,12 +1,12 @@
 # PROGRESS.md
 
-最后更新：2026-04-13
+最后更新：2026-04-25
 
 ## 当前状态
 
 项目已完成用户/认证/签到核心链路、4 种独立内容生成资源的异步任务架构、完整的学习主题模块，以及管理员充值接口。
 
-当前可通过 `cargo check` 和 `cargo test`（89 个测试全部通过）。
+当前可通过 `cargo check` 和 `cargo test`（6 个单元测试、144 个集成测试全部通过）。
 
 ## 已完成
 
@@ -31,6 +31,7 @@
 - 已接入 SeaORM migration，启动时会自动执行迁移。
 - 当前 migration 采用早期开发阶段的顺序编号风格，首个 migration 为 `m0001_init_schema.rs`。
 - 已补充基础 HTTP 级测试，覆盖认证、签到、内容生成回调等场景。
+- 集成测试已引入 `wiremock`，`TestApp` 会为每个测试实例启动独立 mock server，并将 7 个外部微服务 dispatch URL 指向该实例。
 
 ### 内容生成模块
 
@@ -54,6 +55,7 @@
 - 其余三种资源使用 `url` 字段（由微服务回调写入）
 - `knowledge_explanation` 新增 `cost` 字段区分付费（用户自主生成）和免费（学习任务下生成）
 - 已补充集成测试：回调状态更新、退款、非法状态流转、错误 API_KEY、用户 PATCH 等
+- 已补充 4 类内容生成创建接口的 dispatch 成功路径测试，覆盖扣费、QUEUING 落库、`/generate` 子路径和微服务 API Key header。
 
 ### 学习主题模块
 
@@ -71,6 +73,10 @@
 - 顺序解锁逻辑：完成任务 → 解锁下一个任务 → 阶段完成 → 解锁下一个阶段
 - 小测免费额度机制：每任务 N 次免费（可配置），超出扣金币
 - 所有权校验通过 JOIN 链追溯到 `study_subject.user_id`
+- 已补齐学习主题 dispatch 成功路径与协议测试：
+  - 创建学习主题可 mock pretest 成功并返回 201，验证 `total_stages=7` 扣 20 钻石且余额从 100 变为 80。
+  - pretest / plan / quiz dispatch 请求体覆盖 `task_id`、`prompt`、`total_stages`、`language`、`target`、`pretest_results` 等关键字段。
+  - dispatch 失败仍覆盖 503、退款与 FAILED 状态。
 
 ## 当前签到规则实现
 
