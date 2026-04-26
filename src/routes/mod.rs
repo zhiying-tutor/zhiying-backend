@@ -58,6 +58,7 @@ fn api_router() -> Router<AppState> {
         .route("/users", axum::routing::post(users::create_user))
         .route("/tokens", axum::routing::post(tokens::create_token))
         .route("/me", get(me::get_me).patch(me::update_me))
+        .route("/me/username", axum::routing::patch(me::update_username))
         .route(
             "/checkins",
             axum::routing::post(checkins::check_in).get(checkins::list_checkins),

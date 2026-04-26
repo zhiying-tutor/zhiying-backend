@@ -17,6 +17,17 @@ impl MigrationTrait for Migration {
         let mut user_table = schema.create_table_from_entity(user::Entity);
         user_table.if_not_exists();
         manager.create_table(user_table).await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-user-username-unique")
+                    .table(user::Entity)
+                    .col(user::Column::Username)
+                    .unique()
+                    .if_not_exists()
+                    .to_owned(),
+            )
+            .await?;
 
         let mut user_checkin_table = schema.create_table_from_entity(user_checkin::Entity);
         user_checkin_table.if_not_exists();

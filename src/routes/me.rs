@@ -1,5 +1,5 @@
 use axum::{Json, extract::State};
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -18,6 +18,12 @@ pub struct UpdateMeRequest {
     pub gender: Option<Gender>,
     #[validate(length(max = 1_024))]
     pub introduction: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateUsernameRequest {
+    #[validate(length(min = 3, max = 32))]
+    pub username: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,4 +83,38 @@ pub async fn update_me(
         gender: updated.gender,
         introduction: updated.introduction,
     }))
+}
+
+pub async fn update_username(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    Json(payload): Json<UpdateUsernameRequest>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    payload.validate()?;
+
+    let existing_user = user::Entity::find_by_id(auth_user.user_id)
+        .one(&state.db)
+        .await?
+        .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
+
+    if existing_user.username == payload.username {
+        return Ok(ok(UserView::from(existing_user)));
+    }
+
+    let existing = user::Entity::find()
+        .filter(user::Column::Username.eq(payload.username.as_str()))
+        .one(&state.db)
+        .await?;
+
+    if existing.is_some() {
+        return Err(AppError::business(BusinessError::UsernameAlreadyExists));
+    }
+
+    let mut active_user: user::ActiveModel = existing_user.into();
+    active_user.username = Set(payload.username);
+    active_user.updated_at = Set(chrono::Utc::now());
+
+    let updated = active_user.update(&state.db).await?;
+
+    Ok(ok(UserView::from(updated)))
 }

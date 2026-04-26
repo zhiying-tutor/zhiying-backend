@@ -135,6 +135,89 @@ async fn profile_empty_update_succeeds() {
 }
 
 #[tokio::test]
+async fn profile_update_username_works() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/me/username",
+            Some(&token),
+            Some(json!({"username": "alice_new"})),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["username"], "alice_new");
+
+    let (old_login_status, old_login_body) = app
+        .request(
+            "POST",
+            "/api/v1/tokens",
+            None,
+            Some(json!({
+                "username": "alice",
+                "password": "password123",
+            })),
+        )
+        .await;
+    assert_eq!(old_login_status, StatusCode::UNAUTHORIZED);
+    assert_eq!(old_login_body["code"], "INVALID_CREDENTIALS");
+
+    let (new_login_status, new_login_body) = app
+        .request(
+            "POST",
+            "/api/v1/tokens",
+            None,
+            Some(json!({
+                "username": "alice_new",
+                "password": "password123",
+            })),
+        )
+        .await;
+    assert_eq!(new_login_status, StatusCode::OK);
+    assert!(new_login_body["data"]["token"].is_string());
+}
+
+#[tokio::test]
+async fn profile_update_username_conflict_returns_409() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+    app.create_user_and_login("bob", "password123").await;
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/me/username",
+            Some(&token),
+            Some(json!({"username": "bob"})),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "USERNAME_ALREADY_EXISTS");
+}
+
+#[tokio::test]
+async fn profile_update_username_too_short_returns_400() {
+    let app = TestApp::new().await;
+    let token = app.create_user_and_login("alice", "password123").await;
+
+    let (status, body) = app
+        .request(
+            "PATCH",
+            "/api/v1/me/username",
+            Some(&token),
+            Some(json!({"username": "ab"})),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "VALIDATION_FAILED");
+}
+
+#[tokio::test]
 async fn profile_update_all_fields_at_once() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
