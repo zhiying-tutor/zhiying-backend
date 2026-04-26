@@ -52,6 +52,7 @@ impl TestApp {
             jwt_secret: "test-secret".to_owned(),
             jwt_ttl_days: 30,
             cors_allow_origin: "*".to_owned(),
+            register_bonus_diamonds: 80,
             checkin_reward_sequence: vec![1, 2, 3, 4, 5, 6, 7],
             checkin_makeup_gold_cost_per_day: 10,
             checkin_makeup_diamond_cost: 1,

@@ -48,7 +48,7 @@ pub async fn create_user(
         introduction: Set(String::new()),
         exp: Set(0),
         gold: Set(0),
-        diamond: Set(0),
+        diamond: Set(state.config.register_bonus_diamonds),
         total_checkins: Set(0),
         streak_checkins: Set(0),
         last_checkin: Set(None),

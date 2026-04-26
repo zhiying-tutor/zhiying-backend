@@ -10,6 +10,7 @@ pub struct Config {
     pub jwt_secret: String,
     pub jwt_ttl_days: i64,
     pub cors_allow_origin: String,
+    pub register_bonus_diamonds: i32,
     pub checkin_reward_sequence: Vec<i32>,
     pub checkin_makeup_gold_cost_per_day: i32,
     pub checkin_makeup_diamond_cost: i32,
@@ -71,6 +72,17 @@ impl Config {
             .map_err(|_| AppError::internal("JWT_TTL_DAYS is invalid"))?;
 
         let cors_allow_origin = env::var("CORS_ALLOW_ORIGIN").unwrap_or_else(|_| "*".to_owned());
+
+        let register_bonus_diamonds = env::var("REGISTER_BONUS_DIAMONDS")
+            .unwrap_or_else(|_| "80".to_owned())
+            .parse()
+            .map_err(|_| AppError::internal("REGISTER_BONUS_DIAMONDS is invalid"))?;
+
+        if register_bonus_diamonds < 0 {
+            return Err(AppError::internal(
+                "REGISTER_BONUS_DIAMONDS must be non-negative",
+            ));
+        }
 
         let checkin_reward_sequence = env::var("CHECKIN_REWARD_SEQUENCE")
             .unwrap_or_else(|_| "1,2,3,4,6,8,10".to_owned())
@@ -172,6 +184,7 @@ impl Config {
             jwt_secret,
             jwt_ttl_days,
             cors_allow_origin,
+            register_bonus_diamonds,
             checkin_reward_sequence,
             checkin_makeup_gold_cost_per_day,
             checkin_makeup_diamond_cost,

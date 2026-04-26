@@ -25,6 +25,7 @@ async fn auth_and_me_flow_works() {
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["success"], true);
     assert_eq!(body["data"]["username"], "alice");
+    assert_eq!(body["data"]["diamond"], 80);
 
     let (duplicate_status, duplicate_body) = app
         .request(
