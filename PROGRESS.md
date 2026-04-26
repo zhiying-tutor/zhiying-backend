@@ -1,12 +1,12 @@
 # PROGRESS.md
 
-最后更新：2026-04-25
+最后更新：2026-04-26
 
 ## 当前状态
 
-项目已完成用户/认证/签到核心链路、4 种独立内容生成资源的异步任务架构、完整的学习主题模块，以及管理员充值接口。
+项目已完成用户/认证/签到核心链路、当前用户资料与用户名修改、4 种独立内容生成资源的异步任务架构、完整的学习主题模块，以及管理员充值接口。
 
-当前可通过 `cargo check` 和 `cargo test`（6 个单元测试、144 个集成测试全部通过）。
+当前可通过 `cargo check`。最近一次针对用户名修改的测试 `cargo test --test profile profile_update_username` 通过；`cargo test --test profile` 仍有既有用例 `profile_get_returns_default_values` 期望注册后钻石为 0，但当前注册奖励配置为 80，需后续校准测试期望。
 
 ## 已完成
 
@@ -25,13 +25,17 @@
   - `POST /api/v1/tokens`
   - `GET /api/v1/me`
   - `PATCH /api/v1/me`
+  - `PATCH /api/v1/me/username`
   - `POST /api/v1/checkins`
   - `GET /api/v1/checkins`
   - `GET /health`
+- 用户名修改已拆为独立接口，复用 `USERNAME_ALREADY_EXISTS` 错误码，并在数据库层为 `user.username` 增加唯一索引。
+- 注册奖励钻石已改为可配置项 `REGISTER_BONUS_DIAMONDS`，测试环境当前配置为 80。
 - 已接入 SeaORM migration，启动时会自动执行迁移。
 - 当前 migration 采用早期开发阶段的顺序编号风格，首个 migration 为 `m0001_init_schema.rs`。
 - 已补充基础 HTTP 级测试，覆盖认证、签到、内容生成回调等场景。
 - 集成测试已引入 `wiremock`，`TestApp` 会为每个测试实例启动独立 mock server，并将 7 个外部微服务 dispatch URL 指向该实例。
+- 已实现公开配置接口 `GET /api/v1/config`，用于返回前端需要感知的注册奖励和学习主题阶梯价格。
 
 ### 内容生成模块
 
@@ -104,10 +108,11 @@
 ## 尚未完成
 
 - 聚合查询接口（`my-contents`、`public-contents`）
+- 校准注册奖励变更后的 profile 默认值测试期望。
 - 更多业务表结构与后续 schema 演进
 
 ## 下一步建议
 
 1. 实现 `my-contents` 和 `public-contents` 聚合查询。
-2. 补充学习主题模块的集成测试。
+2. 修正 `profile_get_returns_default_values` 中注册奖励钻石的断言，使 profile 测试重新整体通过。
 3. 在新增业务资源时同步补对应 migration；在仍可删库重建的阶段内，优先维护初始化 migration 的清晰度。
