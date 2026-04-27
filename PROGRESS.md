@@ -1,12 +1,12 @@
 # PROGRESS.md
 
-最后更新：2026-04-26
+最后更新：2026-04-27
 
 ## 当前状态
 
-项目已完成用户/认证/签到核心链路、当前用户资料与用户名修改、4 种独立内容生成资源的异步任务架构、完整的学习主题模块，以及管理员充值接口。
+项目已完成用户/认证/签到核心链路、当前用户资料与用户名修改、4 种独立内容生成资源的异步任务架构、完整的学习主题模块、管理员充值接口，以及微服务 dispatch 由 HTTP 切换为 RabbitMQ。
 
-当前可通过 `cargo check`。最近一次针对用户名修改的测试 `cargo test --test profile profile_update_username` 通过；`cargo test --test profile` 仍有既有用例 `profile_get_returns_default_values` 期望注册后钻石为 0，但当前注册奖励配置为 80，需后续校准测试期望。
+当前可通过 `cargo check`。`cargo test --test content --test study_subject --test quiz` 全绿（含 dispatch payload / 失败退款用例）。`cargo test --test profile` 仍有既有用例 `profile_get_returns_default_values` 期望注册后钻石为 0，但当前注册奖励配置为 80，需后续校准测试期望。
 
 ## 已完成
 
@@ -105,11 +105,21 @@
 - 新增环境变量 `RECHARGE_API_KEY`（默认 `sk-recharge-dev`）。
 - 已补充 10 个集成测试覆盖：正常充值、仅充金币、扣减、余额不足、用户不存在、空请求体、错误 API_KEY、其他服务 Key 被拒、多次累积。
 
+### RabbitMQ 微服务 dispatch
+
+- 7 个微服务（knowledge_video / code_video / interactive_html / knowledge_explanation / pretest / plan / quiz）的 dispatch 已由 HTTP 同步调用改为 RabbitMQ publisher confirm。
+- 拓扑：每微服务一个 direct exchange `zhiying.{service}`，绑定一个 queue `zhiying.{service}.generate`，routing key 为 `generate`，启动时由 `declare_topology` 幂等创建。
+- 抽象 `MessagePublisher` trait：生产用 `LapinPublisher`（`deadpool_lapin` 连接池 + publisher confirm），测试用 `InMemoryPublisher`（记录已发布消息、支持 `fail_next`）；`build_app_with_publisher` 暴露注入入口。
+- 配置变更：删除 7 个 `*_SERVICE_URL`，新增 `RABBITMQ_URL` 与 7 个 `*_EXCHANGE`；`*_API_KEY` 全部保留（callback 方向 `ServiceAuth` 仍需要）。
+- 测试改造：`TestApp` 注入 `InMemoryPublisher`，原 wiremock dispatch 校验改为 `app.published_json(exchange)` 断言；dispatch 失败用例改用 `app.fail_next_publish()`。
+- 本地依赖 RabbitMQ 由独立仓库 `zhiying-infra` 的 docker compose 提供。
+
 ## 尚未完成
 
 - 聚合查询接口（`my-contents`、`public-contents`）
 - 校准注册奖励变更后的 profile 默认值测试期望。
 - 更多业务表结构与后续 schema 演进
+- 与 zhiying-infra 协调下游 consumer 的 exchange/queue 命名与消息 schema 对齐。
 
 ## 下一步建议
 

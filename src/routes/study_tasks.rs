@@ -264,9 +264,8 @@ pub async fn create_knowledge_video(
         prompt: payload.prompt,
     };
     if let Err(err) = dispatch_to_service(
-        &state.http_client,
-        &state.config.knowledge_video_service_url,
-        &state.config.knowledge_video_api_key,
+        state.publisher.as_ref(),
+        &state.config.knowledge_video_exchange,
         &request,
     )
     .await
@@ -351,9 +350,8 @@ pub async fn create_interactive_html(
         prompt: payload.prompt,
     };
     if let Err(err) = dispatch_to_service(
-        &state.http_client,
-        &state.config.interactive_html_service_url,
-        &state.config.interactive_html_api_key,
+        state.publisher.as_ref(),
+        &state.config.interactive_html_exchange,
         &request,
     )
     .await
@@ -425,9 +423,8 @@ pub async fn create_explanation(
         prompt: payload.prompt,
     };
     if let Err(err) = dispatch_to_service(
-        &state.http_client,
-        &state.config.knowledge_explanation_service_url,
-        &state.config.knowledge_explanation_api_key,
+        state.publisher.as_ref(),
+        &state.config.knowledge_explanation_exchange,
         &request,
     )
     .await
@@ -511,9 +508,8 @@ pub async fn create_quiz(
         prompt: payload.prompt,
     };
     if let Err(err) = dispatch_quiz(
-        &state.http_client,
-        &state.config.quiz_service_url,
-        &state.config.quiz_api_key,
+        state.publisher.as_ref(),
+        &state.config.quiz_exchange,
         &request,
     )
     .await

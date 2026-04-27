@@ -4,10 +4,6 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde_json::json;
-use wiremock::{
-    Mock, ResponseTemplate,
-    matchers::{body_partial_json, header, method, path},
-};
 use zhiying_backend::entities::{common::ProblemAnswer, problem, study_quiz, study_quiz_problem};
 
 use common::TestApp;
@@ -742,21 +738,6 @@ async fn study_quiz_create_dispatch_payload_contains_task_id_and_prompt() {
 
     let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
 
-    Mock::given(method("POST"))
-        .and(path("/quiz"))
-        .and(header(
-            "Authorization",
-            format!("Bearer {}", app.config.quiz_api_key),
-        ))
-        .and(body_partial_json(json!({
-            "task_id": 1,
-            "prompt": "quiz payload"
-        })))
-        .respond_with(ResponseTemplate::new(200))
-        .expect(1)
-        .mount(&app.mock)
-        .await;
-
     let (status, body) = app
         .request(
             "POST",
@@ -768,4 +749,8 @@ async fn study_quiz_create_dispatch_payload_contains_task_id_and_prompt() {
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["data"]["quiz_id"], 1);
     assert_eq!(body["data"]["cost"], 0);
+
+    let payload = app.published_json(&app.config.quiz_exchange);
+    assert_eq!(payload["task_id"], 1);
+    assert_eq!(payload["prompt"], "quiz payload");
 }

@@ -92,9 +92,8 @@ pub async fn create(
         prompt: payload.prompt,
     };
     if let Err(err) = dispatch_to_service(
-        &state.http_client,
-        &state.config.code_video_service_url,
-        &state.config.code_video_api_key,
+        state.publisher.as_ref(),
+        &state.config.code_video_exchange,
         &request,
     )
     .await
@@ -200,9 +199,8 @@ pub async fn update(
                 prompt: updated.prompt.clone(),
             };
             if let Err(err) = dispatch_to_service(
-                &state.http_client,
-                &state.config.code_video_service_url,
-                &state.config.code_video_api_key,
+                state.publisher.as_ref(),
+                &state.config.code_video_exchange,
                 &request,
             )
             .await

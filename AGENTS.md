@@ -83,9 +83,13 @@
 
 ## 异步微服务回调约定
 
-- 内容生成类微服务（knowledge_video / code_video / interactive_html / knowledge_explanation）的回调使用 `PATCH /internal/{resource}/{id}`，dispatch 发送到 `{SERVICE_URL}/generate`。
-- 学习主题类微服务（pretest / plan / quiz）的回调使用 `POST /internal/{resource}/{id}`，dispatch 发送到 `{SERVICE_URL}` 根路径。
-- 微服务 API Key 统一以 `sk-` 前缀开头，通过 `ServiceAuth` 提取器区分来源。
+- dispatch 方向通过 RabbitMQ 发布消息，回调方向仍走 HTTP。
+- 每个微服务一个独立 direct exchange，命名 `zhiying.{service}`，绑定 queue `zhiying.{service}.generate`，routing key 为 `generate`。当前每个 exchange 只有一个 queue，未来某个微服务需要多种消息时在自己的 exchange 上加 routing key / queue。
+- 启动时由后端调用 `declare_topology` 幂等声明 7 组 exchange/queue/binding（durable）；消息体为 JSON，`delivery_mode=2`（持久化）。
+- Publisher confirms 启用：`basic_publish` 后等待 broker ack 才视为入队成功；nack / 连接失败 → `BusinessError::ServiceUnavailable`，由调用方触发与原 HTTP 同步路径一致的退款逻辑。
+- 内容生成类微服务（knowledge_video / code_video / interactive_html / knowledge_explanation）的回调使用 `PATCH /internal/{resource}/{id}`。
+- 学习主题类微服务（pretest / plan / quiz）的回调使用 `POST /internal/{resource}/{id}`。
+- 微服务 API Key 统一以 `sk-` 前缀开头，仅用于 callback 方向通过 `ServiceAuth` 提取器区分来源；dispatch 方向不再传递 API Key。
 - 回调状态枚举统一为大写字符串：`QUEUING`、`GENERATING`、`FINISHED`、`FAILED`。
 - FAILED 状态统一触发退款，退款金额读取记录上的 `cost` 字段（而非配置值）。
 

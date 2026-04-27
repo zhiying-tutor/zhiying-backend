@@ -185,9 +185,8 @@ pub async fn create(
         target,
     };
     if let Err(err) = dispatch_pretest(
-        &state.http_client,
-        &state.config.pretest_service_url,
-        &state.config.pretest_api_key,
+        state.publisher.as_ref(),
+        &state.config.pretest_exchange,
         &request,
     )
     .await
@@ -398,9 +397,8 @@ pub async fn create_plan(
     };
 
     if let Err(err) = dispatch_plan(
-        &state.http_client,
-        &state.config.plan_service_url,
-        &state.config.plan_api_key,
+        state.publisher.as_ref(),
+        &state.config.plan_exchange,
         &request,
     )
     .await

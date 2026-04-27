@@ -1,7 +1,7 @@
-use reqwest::Client;
 use serde::Serialize;
 
-use crate::error::{AppError, BusinessError};
+use crate::error::AppError;
+use crate::services::message_queue::{MessagePublisher, ROUTING_KEY_GENERATE};
 
 #[derive(Debug, Serialize)]
 pub struct PretestRequest {
@@ -42,53 +42,39 @@ pub struct QuizRequest {
 }
 
 async fn dispatch(
-    client: &Client,
-    url: &str,
-    api_key: &str,
+    publisher: &dyn MessagePublisher,
+    exchange: &str,
     body: &impl Serialize,
 ) -> Result<(), AppError> {
-    let response = client
-        .post(url)
-        .header("Authorization", format!("Bearer {api_key}"))
-        .json(body)
-        .send()
+    let payload = serde_json::to_vec(body).map_err(|err| {
+        tracing::error!(error = %err, "failed to serialize microservice request");
+        AppError::internal("failed to serialize microservice request")
+    })?;
+    publisher
+        .publish(exchange, ROUTING_KEY_GENERATE, &payload)
         .await
-        .map_err(|err| {
-            tracing::error!(error = %err, "failed to reach microservice");
-            AppError::business(BusinessError::ServiceUnavailable)
-        })?;
-
-    if !response.status().is_success() {
-        tracing::error!(status = %response.status(), "microservice returned error");
-        return Err(AppError::business(BusinessError::ServiceUnavailable));
-    }
-
-    Ok(())
 }
 
 pub async fn dispatch_pretest(
-    client: &Client,
-    service_url: &str,
-    api_key: &str,
+    publisher: &dyn MessagePublisher,
+    exchange: &str,
     request: &PretestRequest,
 ) -> Result<(), AppError> {
-    dispatch(client, service_url, api_key, request).await
+    dispatch(publisher, exchange, request).await
 }
 
 pub async fn dispatch_plan(
-    client: &Client,
-    service_url: &str,
-    api_key: &str,
+    publisher: &dyn MessagePublisher,
+    exchange: &str,
     request: &PlanRequest,
 ) -> Result<(), AppError> {
-    dispatch(client, service_url, api_key, request).await
+    dispatch(publisher, exchange, request).await
 }
 
 pub async fn dispatch_quiz(
-    client: &Client,
-    service_url: &str,
-    api_key: &str,
+    publisher: &dyn MessagePublisher,
+    exchange: &str,
     request: &QuizRequest,
 ) -> Result<(), AppError> {
-    dispatch(client, service_url, api_key, request).await
+    dispatch(publisher, exchange, request).await
 }

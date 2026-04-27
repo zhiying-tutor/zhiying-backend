@@ -21,13 +21,13 @@ pub struct Config {
     pub interactive_html_gold_cost: i32,
     pub knowledge_explanation_gold_cost: i32,
 
-    // Microservice URLs
-    pub knowledge_video_service_url: String,
-    pub code_video_service_url: String,
-    pub interactive_html_service_url: String,
-    pub knowledge_explanation_service_url: String,
+    // Microservice exchanges (RabbitMQ)
+    pub knowledge_video_exchange: String,
+    pub code_video_exchange: String,
+    pub interactive_html_exchange: String,
+    pub knowledge_explanation_exchange: String,
 
-    // Microservice API keys
+    // Microservice API keys (used by callbacks back to this server)
     pub knowledge_video_api_key: String,
     pub code_video_api_key: String,
     pub interactive_html_api_key: String,
@@ -35,17 +35,20 @@ pub struct Config {
 
     // Study subject: total_stages → diamond_cost
     pub study_subject_diamond_costs: BTreeMap<i32, i32>,
-    pub pretest_service_url: String,
+    pub pretest_exchange: String,
     pub pretest_api_key: String,
-    pub plan_service_url: String,
+    pub plan_exchange: String,
     pub plan_api_key: String,
-    pub quiz_service_url: String,
+    pub quiz_exchange: String,
     pub quiz_api_key: String,
     pub study_quiz_free_limit_per_task: i32,
     pub study_quiz_extra_gold_cost: i32,
 
     // Recharge
     pub recharge_api_key: String,
+
+    // RabbitMQ
+    pub rabbitmq_url: String,
 }
 
 impl Config {
@@ -128,14 +131,14 @@ impl Config {
             .parse()
             .map_err(|_| AppError::internal("KNOWLEDGE_EXPLANATION_GOLD_COST is invalid"))?;
 
-        let knowledge_video_service_url = env::var("KNOWLEDGE_VIDEO_SERVICE_URL")
-            .unwrap_or_else(|_| "http://localhost:8001".to_owned());
-        let code_video_service_url = env::var("CODE_VIDEO_SERVICE_URL")
-            .unwrap_or_else(|_| "http://localhost:8002".to_owned());
-        let interactive_html_service_url = env::var("INTERACTIVE_HTML_SERVICE_URL")
-            .unwrap_or_else(|_| "http://localhost:8003".to_owned());
-        let knowledge_explanation_service_url = env::var("KNOWLEDGE_EXPLANATION_SERVICE_URL")
-            .unwrap_or_else(|_| "http://localhost:8004".to_owned());
+        let knowledge_video_exchange = env::var("KNOWLEDGE_VIDEO_EXCHANGE")
+            .unwrap_or_else(|_| "zhiying.knowledge_video".to_owned());
+        let code_video_exchange =
+            env::var("CODE_VIDEO_EXCHANGE").unwrap_or_else(|_| "zhiying.code_video".to_owned());
+        let interactive_html_exchange = env::var("INTERACTIVE_HTML_EXCHANGE")
+            .unwrap_or_else(|_| "zhiying.interactive_html".to_owned());
+        let knowledge_explanation_exchange = env::var("KNOWLEDGE_EXPLANATION_EXCHANGE")
+            .unwrap_or_else(|_| "zhiying.knowledge_explanation".to_owned());
 
         let knowledge_video_api_key = env::var("KNOWLEDGE_VIDEO_API_KEY")
             .unwrap_or_else(|_| "sk-knowledge-video-dev".to_owned());
@@ -151,17 +154,15 @@ impl Config {
                 .unwrap_or_else(|_| "3:10,7:20,15:40,30:80".to_owned()),
         )?;
 
-        let pretest_service_url =
-            env::var("PRETEST_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8010".to_owned());
+        let pretest_exchange =
+            env::var("PRETEST_EXCHANGE").unwrap_or_else(|_| "zhiying.pretest".to_owned());
         let pretest_api_key =
             env::var("PRETEST_API_KEY").unwrap_or_else(|_| "sk-pretest-dev".to_owned());
 
-        let plan_service_url =
-            env::var("PLAN_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8011".to_owned());
+        let plan_exchange = env::var("PLAN_EXCHANGE").unwrap_or_else(|_| "zhiying.plan".to_owned());
         let plan_api_key = env::var("PLAN_API_KEY").unwrap_or_else(|_| "sk-plan-dev".to_owned());
 
-        let quiz_service_url =
-            env::var("QUIZ_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8012".to_owned());
+        let quiz_exchange = env::var("QUIZ_EXCHANGE").unwrap_or_else(|_| "zhiying.quiz".to_owned());
         let quiz_api_key = env::var("QUIZ_API_KEY").unwrap_or_else(|_| "sk-quiz-dev".to_owned());
 
         let study_quiz_free_limit_per_task = env::var("STUDY_QUIZ_FREE_LIMIT_PER_TASK")
@@ -176,6 +177,9 @@ impl Config {
 
         let recharge_api_key =
             env::var("RECHARGE_API_KEY").unwrap_or_else(|_| "sk-recharge-dev".to_owned());
+
+        let rabbitmq_url = env::var("RABBITMQ_URL")
+            .unwrap_or_else(|_| "amqp://dev:dev@localhost:5672/%2f".to_owned());
 
         Ok(Self {
             host,
@@ -192,24 +196,25 @@ impl Config {
             code_video_diamond_cost,
             interactive_html_gold_cost,
             knowledge_explanation_gold_cost,
-            knowledge_video_service_url,
-            code_video_service_url,
-            interactive_html_service_url,
-            knowledge_explanation_service_url,
+            knowledge_video_exchange,
+            code_video_exchange,
+            interactive_html_exchange,
+            knowledge_explanation_exchange,
             knowledge_video_api_key,
             code_video_api_key,
             interactive_html_api_key,
             knowledge_explanation_api_key,
             study_subject_diamond_costs,
-            pretest_service_url,
+            pretest_exchange,
             pretest_api_key,
-            plan_service_url,
+            plan_exchange,
             plan_api_key,
-            quiz_service_url,
+            quiz_exchange,
             quiz_api_key,
             study_quiz_free_limit_per_task,
             study_quiz_extra_gold_cost,
             recharge_api_key,
+            rabbitmq_url,
         })
     }
 }

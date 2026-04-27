@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
+use std::sync::Arc;
 
 use axum::{
     Router,
@@ -17,25 +18,21 @@ use sea_orm::{
 use serde_json::Value;
 use tempfile::TempDir;
 use tower::util::ServiceExt;
-use wiremock::{
-    Mock, MockServer, ResponseTemplate,
-    matchers::{header, method, path},
-};
 use zhiying_backend::{
-    auth::ServiceKind,
-    build_app,
+    build_app_with_publisher,
     config::Config,
     entities::{
         code_video, common::ProblemAnswer, interactive_html, knowledge_explanation,
         knowledge_video, problem, study_quiz, study_quiz_problem, study_stage, study_subject,
         study_task, user,
     },
+    services::message_queue::{InMemoryPublisher, PublishedMessage},
 };
 
 pub struct TestApp {
     pub app: Router,
     pub config: Config,
-    pub mock: MockServer,
+    pub publisher: Arc<InMemoryPublisher>,
     pub _temp_dir: TempDir,
 }
 
@@ -43,8 +40,6 @@ impl TestApp {
     pub async fn new() -> Self {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let database_path = temp_dir.path().join("test.db");
-        let mock = MockServer::start().await;
-        let mock_uri = mock.uri();
         let config = Config {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 3000,
@@ -60,83 +55,64 @@ impl TestApp {
             code_video_diamond_cost: 5,
             interactive_html_gold_cost: 10,
             knowledge_explanation_gold_cost: 10,
-            knowledge_video_service_url: format!("{mock_uri}/knowledge-videos"),
-            code_video_service_url: format!("{mock_uri}/code-videos"),
-            interactive_html_service_url: format!("{mock_uri}/interactive-htmls"),
-            knowledge_explanation_service_url: format!("{mock_uri}/knowledge-explanations"),
+            knowledge_video_exchange: "test.knowledge_video".to_owned(),
+            code_video_exchange: "test.code_video".to_owned(),
+            interactive_html_exchange: "test.interactive_html".to_owned(),
+            knowledge_explanation_exchange: "test.knowledge_explanation".to_owned(),
             knowledge_video_api_key: "sk-test-knowledge-video".to_owned(),
             code_video_api_key: "sk-test-code-video".to_owned(),
             interactive_html_api_key: "sk-test-interactive-html".to_owned(),
             knowledge_explanation_api_key: "sk-test-knowledge-explanation".to_owned(),
             study_subject_diamond_costs: BTreeMap::from([(3, 10), (7, 20), (15, 40), (30, 80)]),
-            pretest_service_url: format!("{mock_uri}/pretest"),
+            pretest_exchange: "test.pretest".to_owned(),
             pretest_api_key: "sk-test-pretest".to_owned(),
-            plan_service_url: format!("{mock_uri}/plan"),
+            plan_exchange: "test.plan".to_owned(),
             plan_api_key: "sk-test-plan".to_owned(),
-            quiz_service_url: format!("{mock_uri}/quiz"),
+            quiz_exchange: "test.quiz".to_owned(),
             quiz_api_key: "sk-test-quiz".to_owned(),
             study_quiz_free_limit_per_task: 3,
             study_quiz_extra_gold_cost: 20,
             recharge_api_key: "sk-test-recharge".to_owned(),
+            rabbitmq_url: "amqp://test/%2f".to_owned(),
         };
-        let app = build_app(config.clone())
+        let publisher = InMemoryPublisher::new();
+        let app = build_app_with_publisher(config.clone(), publisher.clone())
             .await
             .expect("failed to build test app");
 
         Self {
             app,
             config,
-            mock,
+            publisher,
             _temp_dir: temp_dir,
         }
     }
 
-    pub async fn mock_pretest_ok(&self) {
-        self.mock_microservice_ok("/pretest", &self.config.pretest_api_key)
-            .await;
+    pub fn fail_next_publish(&self) {
+        self.publisher.fail_next();
     }
 
-    pub async fn mock_plan_ok(&self) {
-        self.mock_microservice_ok("/plan", &self.config.plan_api_key)
-            .await;
+    pub fn published_messages(&self) -> Vec<PublishedMessage> {
+        self.publisher.take()
     }
 
-    pub async fn mock_quiz_ok(&self) {
-        self.mock_microservice_ok("/quiz", &self.config.quiz_api_key)
-            .await;
+    pub fn expect_published(&self, exchange: &str) -> PublishedMessage {
+        self.publisher
+            .find_by_exchange(exchange)
+            .unwrap_or_else(|| panic!("no message published to exchange {exchange}"))
     }
 
-    pub async fn mock_content_generation_ok(&self, service: ServiceKind) {
-        let (service_path, api_key) = match service {
-            ServiceKind::KnowledgeVideo => (
-                "/knowledge-videos/generate",
-                self.config.knowledge_video_api_key.as_str(),
-            ),
-            ServiceKind::CodeVideo => (
-                "/code-videos/generate",
-                self.config.code_video_api_key.as_str(),
-            ),
-            ServiceKind::InteractiveHtml => (
-                "/interactive-htmls/generate",
-                self.config.interactive_html_api_key.as_str(),
-            ),
-            ServiceKind::KnowledgeExplanation => (
-                "/knowledge-explanations/generate",
-                self.config.knowledge_explanation_api_key.as_str(),
-            ),
-            _ => panic!("unsupported content generation service kind"),
-        };
-
-        self.mock_microservice_ok(service_path, api_key).await;
+    pub fn published_json(&self, exchange: &str) -> Value {
+        let msg = self.expect_published(exchange);
+        serde_json::from_slice(&msg.payload).expect("payload not json")
     }
 
-    async fn mock_microservice_ok(&self, service_path: &str, api_key: &str) {
-        Mock::given(method("POST"))
-            .and(path(service_path))
-            .and(header("Authorization", format!("Bearer {api_key}")))
-            .respond_with(ResponseTemplate::new(200))
-            .mount(&self.mock)
-            .await;
+    pub fn assert_published_count(&self, expected: usize) {
+        let actual = self.publisher.len();
+        assert_eq!(
+            actual, expected,
+            "expected {expected} published messages, got {actual}"
+        );
     }
 
     async fn send_request(&self, request: Request<Body>) -> (StatusCode, Value) {

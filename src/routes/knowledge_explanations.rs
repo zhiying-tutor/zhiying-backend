@@ -96,9 +96,8 @@ pub async fn create(
         prompt: payload.prompt,
     };
     if let Err(err) = dispatch_to_service(
-        &state.http_client,
-        &state.config.knowledge_explanation_service_url,
-        &state.config.knowledge_explanation_api_key,
+        state.publisher.as_ref(),
+        &state.config.knowledge_explanation_exchange,
         &request,
     )
     .await
@@ -207,9 +206,8 @@ pub async fn update(
                 prompt: updated.prompt.clone(),
             };
             if let Err(err) = dispatch_to_service(
-                &state.http_client,
-                &state.config.knowledge_explanation_service_url,
-                &state.config.knowledge_explanation_api_key,
+                state.publisher.as_ref(),
+                &state.config.knowledge_explanation_exchange,
                 &request,
             )
             .await

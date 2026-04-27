@@ -2,9 +2,8 @@ mod common;
 
 use axum::http::StatusCode;
 use serde_json::json;
-use zhiying_backend::{
-    auth::ServiceKind,
-    entities::{code_video, interactive_html, knowledge_explanation, knowledge_video},
+use zhiying_backend::entities::{
+    code_video, interactive_html, knowledge_explanation, knowledge_video,
 };
 
 use common::TestApp;
@@ -14,8 +13,6 @@ async fn knowledge_video_create_dispatch_success_charges_diamonds() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("kv_create", "password123").await;
     app.update_user_state("kv_create", None, 0, 0, 100, 50)
-        .await;
-    app.mock_content_generation_ok(ServiceKind::KnowledgeVideo)
         .await;
 
     let (status, body) = app
@@ -31,6 +28,10 @@ async fn knowledge_video_create_dispatch_success_charges_diamonds() {
     assert_eq!(body["data"]["prompt"], "explain ownership");
     assert_eq!(body["data"]["public"], true);
 
+    let payload = app.published_json(&app.config.knowledge_video_exchange);
+    assert_eq!(payload["task_id"], 1);
+    assert_eq!(payload["prompt"], "explain ownership");
+
     let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
     assert_eq!(me_body["data"]["diamond"], 45);
 }
@@ -41,7 +42,6 @@ async fn code_video_create_dispatch_success_charges_diamonds() {
     let token = app.create_user_and_login("cv_create", "password123").await;
     app.update_user_state("cv_create", None, 0, 0, 100, 50)
         .await;
-    app.mock_content_generation_ok(ServiceKind::CodeVideo).await;
 
     let (status, body) = app
         .request(
@@ -55,6 +55,9 @@ async fn code_video_create_dispatch_success_charges_diamonds() {
     assert_eq!(body["data"]["status"], "Queuing");
     assert_eq!(body["data"]["prompt"], "explain this code");
 
+    let payload = app.published_json(&app.config.code_video_exchange);
+    assert_eq!(payload["prompt"], "explain this code");
+
     let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
     assert_eq!(me_body["data"]["diamond"], 45);
 }
@@ -64,8 +67,6 @@ async fn interactive_html_create_dispatch_success_charges_gold() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("ih_create", "password123").await;
     app.update_user_state("ih_create", None, 0, 0, 100, 50)
-        .await;
-    app.mock_content_generation_ok(ServiceKind::InteractiveHtml)
         .await;
 
     let (status, body) = app
@@ -80,6 +81,9 @@ async fn interactive_html_create_dispatch_success_charges_gold() {
     assert_eq!(body["data"]["status"], "Queuing");
     assert_eq!(body["data"]["prompt"], "build a sorting demo");
 
+    let payload = app.published_json(&app.config.interactive_html_exchange);
+    assert_eq!(payload["prompt"], "build a sorting demo");
+
     let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
     assert_eq!(me_body["data"]["gold"], 90);
 }
@@ -89,8 +93,6 @@ async fn knowledge_explanation_create_dispatch_success_charges_gold() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("ke_create", "password123").await;
     app.update_user_state("ke_create", None, 0, 0, 100, 50)
-        .await;
-    app.mock_content_generation_ok(ServiceKind::KnowledgeExplanation)
         .await;
 
     let (status, body) = app
@@ -104,6 +106,9 @@ async fn knowledge_explanation_create_dispatch_success_charges_gold() {
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["data"]["status"], "Queuing");
     assert_eq!(body["data"]["prompt"], "explain trait bounds");
+
+    let payload = app.published_json(&app.config.knowledge_explanation_exchange);
+    assert_eq!(payload["prompt"], "explain trait bounds");
 
     let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
     assert_eq!(me_body["data"]["gold"], 90);

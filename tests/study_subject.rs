@@ -4,10 +4,6 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde_json::json;
-use wiremock::{
-    Mock, ResponseTemplate,
-    matchers::{body_json, body_partial_json, header, method, path},
-};
 use zhiying_backend::entities::{common::ProblemAnswer, pretest_problem, problem, study_subject};
 
 use common::TestApp;
@@ -640,24 +636,6 @@ async fn study_subject_create_with_total_stages_seven_charges_twenty_diamonds() 
     let token = app.create_user_and_login("alice", "password123").await;
     app.update_user_state("alice", None, 0, 0, 0, 100).await;
 
-    Mock::given(method("POST"))
-        .and(path("/pretest"))
-        .and(header(
-            "Authorization",
-            format!("Bearer {}", app.config.pretest_api_key),
-        ))
-        .and(body_partial_json(json!({
-            "task_id": 1,
-            "prompt": "Rust 进阶",
-            "total_stages": 7,
-            "language": "RUST",
-            "target": "能独立写一个 web 服务"
-        })))
-        .respond_with(ResponseTemplate::new(200))
-        .expect(1)
-        .mount(&app.mock)
-        .await;
-
     let (status, body) = app
         .request(
             "POST",
@@ -674,6 +652,13 @@ async fn study_subject_create_with_total_stages_seven_charges_twenty_diamonds() 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["data"]["diamond_cost"], 20);
     assert_eq!(body["data"]["status"], "PretestQueuing");
+
+    let payload = app.published_json(&app.config.pretest_exchange);
+    assert_eq!(payload["task_id"], 1);
+    assert_eq!(payload["prompt"], "Rust 进阶");
+    assert_eq!(payload["total_stages"], 7);
+    assert_eq!(payload["language"], "RUST");
+    assert_eq!(payload["target"], "能独立写一个 web 服务");
 
     let (_, me_body) = app.request("GET", "/api/v1/me", Some(&token), None).await;
     assert_eq!(me_body["data"]["diamond"], 80);
@@ -697,12 +682,7 @@ async fn study_subject_create_dispatch_failure_refunds_twenty_diamonds() {
     let token = app.create_user_and_login("alice", "password123").await;
     app.update_user_state("alice", None, 0, 0, 0, 100).await;
 
-    Mock::given(method("POST"))
-        .and(path("/pretest"))
-        .respond_with(ResponseTemplate::new(500))
-        .expect(1)
-        .mount(&app.mock)
-        .await;
+    app.fail_next_publish();
 
     let (status, _) = app
         .request(
@@ -785,13 +765,16 @@ async fn study_subject_plan_dispatch_payload_includes_pretest_results() {
     .await
     .expect("insert pretest problem");
 
-    Mock::given(method("POST"))
-        .and(path("/plan"))
-        .and(header(
-            "Authorization",
-            format!("Bearer {}", app.config.plan_api_key),
-        ))
-        .and(body_json(json!({
+    let (status, body) = app
+        .request("POST", "/api/v1/study-subjects/1/plan", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["status"], "PLAN_QUEUING");
+
+    let payload = app.published_json(&app.config.plan_exchange);
+    assert_eq!(
+        payload,
+        json!({
             "task_id": 1,
             "prompt": "Python",
             "total_stages": 7,
@@ -808,17 +791,8 @@ async fn study_subject_plan_dispatch_payload_includes_pretest_results() {
                 "chosen_answer": "A",
                 "confidence": "VerySure"
             }]
-        })))
-        .respond_with(ResponseTemplate::new(200))
-        .expect(1)
-        .mount(&app.mock)
-        .await;
-
-    let (status, body) = app
-        .request("POST", "/api/v1/study-subjects/1/plan", Some(&token), None)
-        .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["data"]["status"], "PLAN_QUEUING");
+        })
+    );
 }
 
 #[tokio::test]
