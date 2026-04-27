@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use super::common::ProblemAnswer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sea_orm(
     rs_type = "String",
     db_type = "String(StringLen::N(16))",
