@@ -11,8 +11,7 @@ pub mod state;
 use std::sync::Arc;
 
 use axum::Router;
-use deadpool_lapin::lapin::ConnectionProperties;
-use deadpool_lapin::{Manager, Pool, Runtime};
+use deadpool_lapin::{Config as LapinConfig, CreatePoolError, Pool, Runtime};
 use sea_orm::{Database, DbErr};
 use sea_orm_migration::MigratorTrait;
 
@@ -57,9 +56,10 @@ pub async fn build_app_with_publisher(
     )))
 }
 
-fn build_rabbitmq_pool(url: &str) -> Result<Pool, deadpool_lapin::BuildError> {
-    let manager = Manager::new(url.to_owned(), ConnectionProperties::default());
-    Pool::builder(manager).runtime(Runtime::Tokio1).build()
+fn build_rabbitmq_pool(url: &str) -> Result<Pool, CreatePoolError> {
+    let mut cfg = LapinConfig::default();
+    cfg.url = Some(url.to_owned());
+    cfg.create_pool(Some(Runtime::Tokio1))
 }
 
 fn topology_entries(config: &Config) -> Vec<TopologyEntry<'_>> {
