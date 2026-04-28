@@ -47,6 +47,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .nest("/api/v1", api_router())
+        .nest("/internal", internal::router())
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)
@@ -150,7 +151,6 @@ fn api_router() -> Router<AppState> {
             "/problems/{id}/bookmark",
             axum::routing::patch(problems::toggle_bookmark),
         )
-        .nest("/internal", internal::router())
         .merge(placeholders::router())
 }
 

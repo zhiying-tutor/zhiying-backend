@@ -50,8 +50,12 @@ impl FromRequestParts<AppState> for AuthUser {
 
 /// Extractor for microservice authentication via API key.
 ///
-/// Matches the `Authorization: Bearer sk-...` header against all configured
-/// API keys and identifies which service is calling.
+/// Matches the `Authorization: Bearer <key>` header against all configured
+/// API keys and identifies which service is calling. Only mounted on the
+/// `/internal/*` route tree, which is physically isolated from `/api/v1/*`
+/// (where `AuthUser` lives) — so no prefix discrimination is needed here.
+/// By convention configured keys start with `sk-`, but that's an operator
+/// convention, not enforced by this extractor.
 #[derive(Debug, Clone)]
 pub struct ServiceAuth {
     pub service: ServiceKind,
@@ -85,10 +89,6 @@ impl FromRequestParts<AppState> for ServiceAuth {
         let token = authorization
             .strip_prefix("Bearer ")
             .ok_or_else(|| AppError::business(BusinessError::InvalidAuthorizationHeader))?;
-
-        if !token.starts_with("sk-") {
-            return Err(AppError::business(BusinessError::InvalidApiKey));
-        }
 
         let config = &state.config;
         let service = if token == config.knowledge_video_api_key {
