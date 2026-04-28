@@ -5,7 +5,7 @@ use validator::Validate;
 
 use crate::{
     auth::AuthUser,
-    entities::{common::Gender, user},
+    entities::{common::Gender, study_subject, user},
     error::{AppError, BusinessError},
     response::ok,
     routes::user_views::UserView,
@@ -18,6 +18,7 @@ pub struct UpdateMeRequest {
     pub gender: Option<Gender>,
     #[validate(length(max = 1_024))]
     pub introduction: Option<String>,
+    pub active_study_subject_id: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -33,6 +34,7 @@ pub struct MeProfileView {
     birth_year: Option<i32>,
     gender: Option<Gender>,
     introduction: String,
+    active_study_subject_id: Option<i32>,
 }
 
 pub async fn get_me(
@@ -73,6 +75,18 @@ pub async fn update_me(
         active_user.introduction = Set(introduction);
     }
 
+    if let Some(subject_id) = payload.active_study_subject_id {
+        let owns = study_subject::Entity::find_by_id(subject_id)
+            .filter(study_subject::Column::UserId.eq(auth_user.user_id))
+            .one(&state.db)
+            .await?
+            .is_some();
+        if !owns {
+            return Err(AppError::business(BusinessError::StudySubjectNotFound));
+        }
+        active_user.active_study_subject_id = Set(Some(subject_id));
+    }
+
     active_user.updated_at = Set(chrono::Utc::now());
     let updated = active_user.update(&state.db).await?;
 
@@ -82,6 +96,7 @@ pub async fn update_me(
         birth_year: updated.birth_year,
         gender: updated.gender,
         introduction: updated.introduction,
+        active_study_subject_id: updated.active_study_subject_id,
     }))
 }
 

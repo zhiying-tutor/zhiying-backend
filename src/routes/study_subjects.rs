@@ -157,7 +157,6 @@ pub async fn create(
     let mut active_user: user::ActiveModel = existing_user.into();
     active_user.diamond = Set(active_user.diamond.unwrap() - cost);
     active_user.updated_at = Set(now);
-    active_user.update(&tx).await?;
 
     let record = study_subject::ActiveModel {
         user_id: Set(auth_user.user_id),
@@ -174,6 +173,10 @@ pub async fn create(
     }
     .insert(&tx)
     .await?;
+
+    // Newly created subject becomes the user's active subject.
+    active_user.active_study_subject_id = Set(Some(record.id));
+    active_user.update(&tx).await?;
 
     tx.commit().await?;
 

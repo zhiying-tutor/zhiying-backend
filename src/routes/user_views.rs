@@ -16,6 +16,7 @@ pub struct UserView {
     streak_checkins: i32,
     last_checkin: Option<String>,
     last_login: Option<String>,
+    active_study_subject_id: Option<i32>,
     created_at: i64,
     updated_at: i64,
 }
@@ -35,6 +36,7 @@ impl From<user::Model> for UserView {
             streak_checkins: model.streak_checkins,
             last_checkin: model.last_checkin.map(|value| value.to_string()),
             last_login: model.last_login.map(|value| value.to_rfc3339()),
+            active_study_subject_id: model.active_study_subject_id,
             created_at: model.created_at.timestamp_millis(),
             updated_at: model.updated_at.timestamp_millis(),
         }

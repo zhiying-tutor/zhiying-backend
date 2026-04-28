@@ -21,6 +21,7 @@ pub struct Model {
     pub streak_checkins: i32,
     pub last_checkin: Option<Date>,
     pub invited_by: Option<i32>,
+    pub active_study_subject_id: Option<i32>,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
