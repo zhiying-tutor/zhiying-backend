@@ -13,11 +13,12 @@ use validator::Validate;
 use crate::{
     auth::AuthUser,
     entities::{
-        common::ProblemAnswer, pretest_problem, problem, study_stage,
-        study_stage::StudyStageStatus, study_subject, study_subject::StudySubjectStatus, user,
+        common::ProblemAnswer, pretest_problem, problem, study_stage, study_subject,
+        study_subject::StudySubjectStatus, study_task, user,
     },
     error::{AppError, BusinessError},
     response::{created, ok},
+    routes::study_stages::{StudyStageDetailView, StudyTaskBriefView},
     services::study_subject::{
         PlanRequest, PretestRequest, PretestResult, dispatch_plan, dispatch_pretest,
     },
@@ -301,18 +302,6 @@ pub async fn get_pretest(
     Ok(ok(views))
 }
 
-#[derive(Debug, Serialize)]
-pub struct StudyStageListItemView {
-    pub id: i32,
-    pub title: String,
-    pub description: String,
-    pub sort_order: i32,
-    pub status: StudyStageStatus,
-    pub total_tasks: i32,
-    pub finished_tasks: i32,
-    pub created_at: i64,
-}
-
 /// GET /api/v1/study-subjects/{id}/stages
 pub async fn list_stages(
     State(state): State<AppState>,
@@ -331,9 +320,32 @@ pub async fn list_stages(
         .all(&state.db)
         .await?;
 
-    let views: Vec<StudyStageListItemView> = stages
+    let stage_ids: Vec<i32> = stages.iter().map(|s| s.id).collect();
+    let tasks = study_task::Entity::find()
+        .filter(study_task::Column::StudyStageId.is_in(stage_ids))
+        .order_by_asc(study_task::Column::SortOrder)
+        .all(&state.db)
+        .await?;
+
+    let mut tasks_by_stage: std::collections::HashMap<i32, Vec<StudyTaskBriefView>> =
+        std::collections::HashMap::new();
+    for t in tasks {
+        tasks_by_stage
+            .entry(t.study_stage_id)
+            .or_default()
+            .push(StudyTaskBriefView {
+                id: t.id,
+                title: t.title,
+                description: t.description,
+                sort_order: t.sort_order,
+                status: t.status,
+                created_at: t.created_at.timestamp_millis(),
+            });
+    }
+
+    let views: Vec<StudyStageDetailView> = stages
         .into_iter()
-        .map(|s| StudyStageListItemView {
+        .map(|s| StudyStageDetailView {
             id: s.id,
             title: s.title,
             description: s.description,
@@ -342,6 +354,7 @@ pub async fn list_stages(
             total_tasks: s.total_tasks,
             finished_tasks: s.finished_tasks,
             created_at: s.created_at.timestamp_millis(),
+            tasks: tasks_by_stage.remove(&s.id).unwrap_or_default(),
         })
         .collect();
 
