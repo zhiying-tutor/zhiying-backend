@@ -13,8 +13,8 @@ use validator::Validate;
 use crate::{
     auth::AuthUser,
     entities::{
-        common::ProblemAnswer, pretest_problem, problem, study_subject,
-        study_subject::StudySubjectStatus, user,
+        common::ProblemAnswer, pretest_problem, problem, study_stage,
+        study_stage::StudyStageStatus, study_subject, study_subject::StudySubjectStatus, user,
     },
     error::{AppError, BusinessError},
     response::{created, ok},
@@ -295,6 +295,53 @@ pub async fn get_pretest(
                 confidence: pp.confidence,
                 chosen_answer: pp.chosen_answer,
             })
+        })
+        .collect();
+
+    Ok(ok(views))
+}
+
+#[derive(Debug, Serialize)]
+pub struct StudyStageListItemView {
+    pub id: i32,
+    pub title: String,
+    pub description: String,
+    pub sort_order: i32,
+    pub status: StudyStageStatus,
+    pub total_tasks: i32,
+    pub finished_tasks: i32,
+    pub created_at: i64,
+}
+
+/// GET /api/v1/study-subjects/{id}/stages
+pub async fn list_stages(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    Path(id): Path<i32>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    let subject = study_subject::Entity::find_by_id(id)
+        .filter(study_subject::Column::UserId.eq(auth_user.user_id))
+        .one(&state.db)
+        .await?
+        .ok_or_else(|| AppError::business(BusinessError::StudySubjectNotFound))?;
+
+    let stages = study_stage::Entity::find()
+        .filter(study_stage::Column::StudySubjectId.eq(subject.id))
+        .order_by_asc(study_stage::Column::SortOrder)
+        .all(&state.db)
+        .await?;
+
+    let views: Vec<StudyStageListItemView> = stages
+        .into_iter()
+        .map(|s| StudyStageListItemView {
+            id: s.id,
+            title: s.title,
+            description: s.description,
+            sort_order: s.sort_order,
+            status: s.status,
+            total_tasks: s.total_tasks,
+            finished_tasks: s.finished_tasks,
+            created_at: s.created_at.timestamp_millis(),
         })
         .collect();
 

@@ -111,6 +111,10 @@ fn api_router() -> Router<AppState> {
             "/study-subjects/{id}/plan",
             axum::routing::post(study_subjects::create_plan),
         )
+        .route(
+            "/study-subjects/{id}/stages",
+            get(study_subjects::list_stages),
+        )
         // Study stages
         .route("/study-stages/{id}", get(study_stages::get_by_id))
         // Study tasks
