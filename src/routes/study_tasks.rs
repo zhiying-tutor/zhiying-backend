@@ -30,6 +30,7 @@ use crate::{
 #[derive(Debug, Serialize)]
 pub struct StudyTaskView {
     pub id: i32,
+    pub study_stage_id: i32,
     pub title: String,
     pub description: String,
     pub sort_order: i32,
@@ -45,6 +46,7 @@ impl From<study_task::Model> for StudyTaskView {
     fn from(m: study_task::Model) -> Self {
         Self {
             id: m.id,
+            study_stage_id: m.study_stage_id,
             title: m.title,
             description: m.description,
             sort_order: m.sort_order,
