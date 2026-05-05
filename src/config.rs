@@ -49,6 +49,14 @@ pub struct Config {
 
     // RabbitMQ
     pub rabbitmq_url: String,
+
+    // Object storage (S3-compatible)
+    pub storage_endpoint: String,
+    pub storage_access_key: String,
+    pub storage_secret_key: String,
+    pub storage_region: String,
+    pub storage_bucket: String,
+    pub storage_public_base: String,
 }
 
 impl Config {
@@ -181,6 +189,19 @@ impl Config {
         let rabbitmq_url = env::var("RABBITMQ_URL")
             .unwrap_or_else(|_| "amqp://dev:dev@localhost:5672/%2f".to_owned());
 
+        let storage_endpoint = env::var("STORAGE_ENDPOINT")
+            .unwrap_or_else(|_| "http://localhost:9100".to_owned());
+        let storage_access_key =
+            env::var("STORAGE_ACCESS_KEY").unwrap_or_else(|_| "dev".to_owned());
+        let storage_secret_key =
+            env::var("STORAGE_SECRET_KEY").unwrap_or_else(|_| "devdevdev".to_owned());
+        let storage_region =
+            env::var("STORAGE_REGION").unwrap_or_else(|_| "us-east-1".to_owned());
+        let storage_bucket =
+            env::var("STORAGE_BUCKET").unwrap_or_else(|_| "zhiying-content".to_owned());
+        let storage_public_base = env::var("STORAGE_PUBLIC_BASE")
+            .unwrap_or_else(|_| storage_endpoint.clone());
+
         Ok(Self {
             host,
             port,
@@ -215,6 +236,12 @@ impl Config {
             study_quiz_extra_gold_cost,
             recharge_api_key,
             rabbitmq_url,
+            storage_endpoint,
+            storage_access_key,
+            storage_secret_key,
+            storage_region,
+            storage_bucket,
+            storage_public_base,
         })
     }
 }

@@ -28,7 +28,7 @@ pub struct Model {
     pub status: CodeVideoStatus,
     #[sea_orm(column_type = "Text")]
     pub prompt: String,
-    pub url: Option<String>,
+    pub object_key: Option<String>,
     pub public: bool,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,

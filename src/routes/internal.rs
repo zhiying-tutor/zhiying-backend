@@ -37,7 +37,7 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, Deserialize)]
 pub struct UpdateStatusRequest {
     pub status: String,
-    pub url: Option<String>,
+    pub object_key: Option<String>,
     pub content: Option<String>,
     pub mindmap: Option<String>,
 }
@@ -68,7 +68,7 @@ async fn update_knowledge_video(
     active.updated_at = Set(Utc::now());
 
     if new_status == knowledge_video::KnowledgeVideoStatus::Finished {
-        active.url = Set(payload.url);
+        active.object_key = Set(payload.object_key);
     }
 
     if new_status == knowledge_video::KnowledgeVideoStatus::Failed {
@@ -142,7 +142,7 @@ async fn update_code_video(
     active.updated_at = Set(Utc::now());
 
     if new_status == code_video::CodeVideoStatus::Finished {
-        active.url = Set(payload.url);
+        active.object_key = Set(payload.object_key);
     }
 
     if new_status == code_video::CodeVideoStatus::Failed {
@@ -214,7 +214,7 @@ async fn update_interactive_html(
     active.updated_at = Set(Utc::now());
 
     if new_status == interactive_html::InteractiveHtmlStatus::Finished {
-        active.url = Set(payload.url);
+        active.object_key = Set(payload.object_key);
     }
 
     if new_status == interactive_html::InteractiveHtmlStatus::Failed {
