@@ -7,6 +7,7 @@ use crate::{config::Config, response::ok, state::AppState};
 pub struct PublicConfig {
     study_subject: StudySubjectConfig,
     storage: StorageConfig,
+    resource: ResourceConfig,
 }
 
 #[derive(Debug, Serialize)]
@@ -26,6 +27,12 @@ pub struct StorageConfig {
     bucket: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ResourceConfig {
+    knowledge_video_diamond_cost: i32,
+    interactive_html_gold_cost: i32,
+}
+
 fn build_public_config(config: &Config) -> PublicConfig {
     let pricing = config
         .study_subject_diamond_costs
@@ -41,6 +48,10 @@ fn build_public_config(config: &Config) -> PublicConfig {
         storage: StorageConfig {
             public_base: config.storage_public_base.clone(),
             bucket: config.storage_bucket.clone(),
+        },
+        resource: ResourceConfig {
+            knowledge_video_diamond_cost: config.knowledge_video_diamond_cost,
+            interactive_html_gold_cost: config.interactive_html_gold_cost,
         },
     }
 }

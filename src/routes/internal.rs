@@ -472,6 +472,7 @@ async fn callback_study_subject(
     }
 
     // Handle Plan FINISHED → create stages and tasks + initialize unlock
+    let mut explanations_to_dispatch: Vec<(i32, String)> = Vec::new();
     if new_status == StudySubjectStatus::Studying {
         let stages = payload
             .stages
@@ -509,6 +510,22 @@ async fn callback_study_subject(
                     StudyTaskStatus::Locked
                 };
 
+                let prompt = format!("{}\n\n{}", t.title, t.description);
+
+                let ke_record = knowledge_explanation::ActiveModel {
+                    user_id: Set(subject.user_id),
+                    status: Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing),
+                    prompt: Set(prompt.clone()),
+                    content: Set(None),
+                    public: Set(false),
+                    cost: Set(0),
+                    created_at: Set(now),
+                    updated_at: Set(now),
+                    ..Default::default()
+                }
+                .insert(&tx)
+                .await?;
+
                 study_task::ActiveModel {
                     study_stage_id: Set(stage_record.id),
                     title: Set(t.title),
@@ -517,19 +534,55 @@ async fn callback_study_subject(
                     status: Set(task_status),
                     knowledge_video_id: Set(None),
                     interactive_html_id: Set(None),
-                    knowledge_explanation_id: Set(None),
+                    knowledge_explanation_id: Set(Some(ke_record.id)),
                     created_at: Set(now),
                     updated_at: Set(now),
                     ..Default::default()
                 }
                 .insert(&tx)
                 .await?;
+
+                explanations_to_dispatch.push((ke_record.id, prompt));
             }
         }
     }
 
     active.update(&tx).await?;
     tx.commit().await?;
+
+    // Dispatch explanation generation outside the transaction.
+    // Failures here mark the individual record as FAILED; the plan callback
+    // itself still succeeds because the rest of the subject state is committed.
+    for (ke_id, prompt) in explanations_to_dispatch {
+        let request = crate::services::content::GenerateRequest {
+            task_id: ke_id,
+            prompt,
+        };
+        if let Err(err) = crate::services::content::dispatch_to_service(
+            state.publisher.as_ref(),
+            &state.config.knowledge_explanation_exchange,
+            &request,
+        )
+        .await
+        {
+            tracing::error!(
+                error = %err,
+                ke_id,
+                "failed to dispatch knowledge_explanation; marking FAILED"
+            );
+            let tx = state.db.begin().await?;
+            if let Some(record) = knowledge_explanation::Entity::find_by_id(ke_id)
+                .one(&tx)
+                .await?
+            {
+                let mut active: knowledge_explanation::ActiveModel = record.into();
+                active.status = Set(knowledge_explanation::KnowledgeExplanationStatus::Failed);
+                active.updated_at = Set(Utc::now());
+                active.update(&tx).await?;
+            }
+            tx.commit().await?;
+        }
+    }
 
     Ok(ok(
         serde_json::json!({"id": id, "status": format!("{:?}", new_status)}),
