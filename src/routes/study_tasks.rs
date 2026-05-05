@@ -401,7 +401,6 @@ pub async fn create_explanation(
         status: Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing),
         prompt: Set(payload.prompt.clone()),
         content: Set(None),
-        mindmap: Set(None),
         public: Set(false),
         cost: Set(0),
         created_at: Set(now),

@@ -30,7 +30,6 @@ pub struct KnowledgeExplanationView {
     pub status: knowledge_explanation::KnowledgeExplanationStatus,
     pub prompt: String,
     pub content: Option<String>,
-    pub mindmap: Option<serde_json::Value>,
     pub public: bool,
     pub created_at: i64,
     pub updated_at: i64,
@@ -43,7 +42,6 @@ impl From<knowledge_explanation::Model> for KnowledgeExplanationView {
             status: m.status,
             prompt: m.prompt,
             content: m.content,
-            mindmap: m.mindmap.and_then(|s| serde_json::from_str(&s).ok()),
             public: m.public,
             created_at: m.created_at.timestamp_millis(),
             updated_at: m.updated_at.timestamp_millis(),
@@ -79,7 +77,6 @@ pub async fn create(
         status: Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing),
         prompt: Set(payload.prompt.clone()),
         content: Set(None),
-        mindmap: Set(None),
         public: Set(payload.public),
         cost: Set(cost),
         created_at: Set(now),
@@ -190,7 +187,6 @@ pub async fn update(
 
         active.status = Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing);
         active.content = Set(None);
-        active.mindmap = Set(None);
         active.cost = Set(cost);
         changed = true;
     }

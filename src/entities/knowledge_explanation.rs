@@ -30,8 +30,6 @@ pub struct Model {
     pub prompt: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub content: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub mindmap: Option<String>,
     pub public: bool,
     pub cost: i32,
     pub created_at: DateTimeUtc,

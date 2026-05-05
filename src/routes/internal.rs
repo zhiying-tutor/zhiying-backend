@@ -39,7 +39,6 @@ pub struct UpdateStatusRequest {
     pub status: String,
     pub object_key: Option<String>,
     pub content: Option<String>,
-    pub mindmap: Option<String>,
 }
 
 // --- knowledge_video ---
@@ -289,7 +288,6 @@ async fn update_knowledge_explanation(
 
     if new_status == knowledge_explanation::KnowledgeExplanationStatus::Finished {
         active.content = Set(payload.content);
-        active.mindmap = Set(payload.mindmap);
     }
 
     if new_status == knowledge_explanation::KnowledgeExplanationStatus::Failed {
