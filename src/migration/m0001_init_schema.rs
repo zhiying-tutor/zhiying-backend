@@ -4,6 +4,7 @@ use sea_orm_migration::prelude::*;
 use crate::entities::{
     code_video, interactive_html, knowledge_explanation, knowledge_video, pretest_problem, problem,
     study_quiz, study_quiz_problem, study_stage, study_subject, study_task, user, user_checkin,
+    user_code_video_link, user_interactive_html_link, user_knowledge_video_link,
 };
 
 #[derive(DeriveMigrationName)]
@@ -79,11 +80,66 @@ impl MigrationTrait for Migration {
         study_quiz_problem_table.if_not_exists();
         manager.create_table(study_quiz_problem_table).await?;
 
+        let mut user_knowledge_video_link_table =
+            schema.create_table_from_entity(user_knowledge_video_link::Entity);
+        user_knowledge_video_link_table.if_not_exists();
+        manager
+            .create_table(user_knowledge_video_link_table)
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-user-knowledge-video-link-user")
+                    .table(user_knowledge_video_link::Entity)
+                    .col(user_knowledge_video_link::Column::UserId)
+                    .col(user_knowledge_video_link::Column::CreatedAt)
+                    .if_not_exists()
+                    .to_owned(),
+            )
+            .await?;
+
+        let mut user_code_video_link_table =
+            schema.create_table_from_entity(user_code_video_link::Entity);
+        user_code_video_link_table.if_not_exists();
+        manager.create_table(user_code_video_link_table).await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-user-code-video-link-user")
+                    .table(user_code_video_link::Entity)
+                    .col(user_code_video_link::Column::UserId)
+                    .col(user_code_video_link::Column::CreatedAt)
+                    .if_not_exists()
+                    .to_owned(),
+            )
+            .await?;
+
+        let mut user_interactive_html_link_table =
+            schema.create_table_from_entity(user_interactive_html_link::Entity);
+        user_interactive_html_link_table.if_not_exists();
+        manager
+            .create_table(user_interactive_html_link_table)
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-user-interactive-html-link-user")
+                    .table(user_interactive_html_link::Entity)
+                    .col(user_interactive_html_link::Column::UserId)
+                    .col(user_interactive_html_link::Column::CreatedAt)
+                    .if_not_exists()
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         for table in [
+            "user_interactive_html_link",
+            "user_code_video_link",
+            "user_knowledge_video_link",
             "study_quiz_problem",
             "study_quiz",
             "study_task",

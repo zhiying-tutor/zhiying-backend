@@ -30,6 +30,7 @@ pub struct StorageConfig {
 #[derive(Debug, Serialize)]
 pub struct ResourceConfig {
     knowledge_video_diamond_cost: i32,
+    code_video_diamond_cost: i32,
     interactive_html_gold_cost: i32,
     study_quiz_free_limit_per_task: i32,
     study_quiz_extra_gold_cost: i32,
@@ -53,6 +54,7 @@ fn build_public_config(config: &Config) -> PublicConfig {
         },
         resource: ResourceConfig {
             knowledge_video_diamond_cost: config.knowledge_video_diamond_cost,
+            code_video_diamond_cost: config.code_video_diamond_cost,
             interactive_html_gold_cost: config.interactive_html_gold_cost,
             study_quiz_free_limit_per_task: config.study_quiz_free_limit_per_task,
             study_quiz_extra_gold_cost: config.study_quiz_extra_gold_cost,

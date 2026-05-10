@@ -66,24 +66,27 @@ fn api_router() -> Router<AppState> {
         )
         .route(
             "/knowledge-videos",
-            axum::routing::post(knowledge_videos::create),
+            axum::routing::post(knowledge_videos::create).get(knowledge_videos::list),
         )
         .route(
             "/knowledge-videos/{id}",
-            get(knowledge_videos::get_by_id).patch(knowledge_videos::update),
+            get(knowledge_videos::get_by_id).delete(knowledge_videos::delete),
         )
-        .route("/code-videos", axum::routing::post(code_videos::create))
+        .route(
+            "/code-videos",
+            axum::routing::post(code_videos::create).get(code_videos::list),
+        )
         .route(
             "/code-videos/{id}",
-            get(code_videos::get_by_id).patch(code_videos::update),
+            get(code_videos::get_by_id).delete(code_videos::delete),
         )
         .route(
             "/interactive-htmls",
-            axum::routing::post(interactive_htmls::create),
+            axum::routing::post(interactive_htmls::create).get(interactive_htmls::list),
         )
         .route(
             "/interactive-htmls/{id}",
-            get(interactive_htmls::get_by_id).patch(interactive_htmls::update),
+            get(interactive_htmls::get_by_id).delete(interactive_htmls::delete),
         )
         .route(
             "/knowledge-explanations",
@@ -125,11 +128,13 @@ fn api_router() -> Router<AppState> {
         )
         .route(
             "/study-tasks/{id}/knowledge-video",
-            axum::routing::post(study_tasks::create_knowledge_video),
+            axum::routing::post(study_tasks::create_knowledge_video)
+                .get(study_tasks::get_knowledge_video),
         )
         .route(
             "/study-tasks/{id}/interactive-html",
-            axum::routing::post(study_tasks::create_interactive_html),
+            axum::routing::post(study_tasks::create_interactive_html)
+                .get(study_tasks::get_interactive_html),
         )
         .route(
             "/study-tasks/{id}/explanation",

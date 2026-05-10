@@ -4,7 +4,10 @@ use axum::{
     routing::{patch, post},
 };
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
+    TransactionTrait,
+};
 use serde::Deserialize;
 
 use crate::{
@@ -14,6 +17,7 @@ use crate::{
         knowledge_video, pretest_problem, problem, study_quiz, study_quiz::StudyQuizStatus,
         study_quiz_problem, study_stage, study_stage::StudyStageStatus, study_subject,
         study_subject::StudySubjectStatus, study_task, study_task::StudyTaskStatus, user,
+        user_code_video_link, user_interactive_html_link, user_knowledge_video_link,
     },
     error::{AppError, BusinessError},
     response::ok,
@@ -39,6 +43,69 @@ pub struct UpdateStatusRequest {
     pub status: String,
     pub object_key: Option<String>,
     pub content: Option<String>,
+}
+
+// 通过 link 或 study_task 反查 resource 所属用户。
+// link 命中即工具自由创建，否则尝试任务派生。返回 None 表示孤儿资源。
+async fn resolve_owner_via_task<C: ConnectionTrait>(
+    db: &C,
+    task_filter: study_task::Column,
+    resource_id: i32,
+) -> Result<Option<i32>, AppError> {
+    let task = study_task::Entity::find()
+        .filter(task_filter.eq(resource_id))
+        .one(db)
+        .await?;
+    let Some(task) = task else {
+        return Ok(None);
+    };
+    let stage = study_stage::Entity::find_by_id(task.study_stage_id)
+        .one(db)
+        .await?;
+    let Some(stage) = stage else {
+        return Ok(None);
+    };
+    let subject = study_subject::Entity::find_by_id(stage.study_subject_id)
+        .one(db)
+        .await?;
+    Ok(subject.map(|s| s.user_id))
+}
+
+async fn resolve_knowledge_video_owner<C: ConnectionTrait>(
+    db: &C,
+    id: i32,
+) -> Result<Option<i32>, AppError> {
+    if let Some(link) = user_knowledge_video_link::Entity::find_by_id(id)
+        .one(db)
+        .await?
+    {
+        return Ok(Some(link.user_id));
+    }
+    resolve_owner_via_task(db, study_task::Column::KnowledgeVideoId, id).await
+}
+
+async fn resolve_code_video_owner<C: ConnectionTrait>(
+    db: &C,
+    id: i32,
+) -> Result<Option<i32>, AppError> {
+    if let Some(link) = user_code_video_link::Entity::find_by_id(id).one(db).await? {
+        return Ok(Some(link.user_id));
+    }
+    // C2V 无任务派生路径——孤儿即返回 None
+    Ok(None)
+}
+
+async fn resolve_interactive_html_owner<C: ConnectionTrait>(
+    db: &C,
+    id: i32,
+) -> Result<Option<i32>, AppError> {
+    if let Some(link) = user_interactive_html_link::Entity::find_by_id(id)
+        .one(db)
+        .await?
+    {
+        return Ok(Some(link.user_id));
+    }
+    resolve_owner_via_task(db, study_task::Column::InteractiveHtmlId, id).await
 }
 
 // --- knowledge_video ---
@@ -71,15 +138,22 @@ async fn update_knowledge_video(
     }
 
     if new_status == knowledge_video::KnowledgeVideoStatus::Failed {
-        let cost = state.config.knowledge_video_diamond_cost;
-        let existing_user = user::Entity::find_by_id(record.user_id)
-            .one(&tx)
-            .await?
-            .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
-        let mut active_user: user::ActiveModel = existing_user.into();
-        active_user.diamond = Set(active_user.diamond.unwrap() + cost);
-        active_user.updated_at = Set(Utc::now());
-        active_user.update(&tx).await?;
+        if let Some(owner_id) = resolve_knowledge_video_owner(&tx, id).await? {
+            let cost = state.config.knowledge_video_diamond_cost;
+            let existing_user = user::Entity::find_by_id(owner_id)
+                .one(&tx)
+                .await?
+                .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
+            let mut active_user: user::ActiveModel = existing_user.into();
+            active_user.diamond = Set(active_user.diamond.unwrap() + cost);
+            active_user.updated_at = Set(Utc::now());
+            active_user.update(&tx).await?;
+        } else {
+            tracing::warn!(
+                resource_id = id,
+                "knowledge_video FAILED with no owner (link or task) — skip refund"
+            );
+        }
     }
 
     active.update(&tx).await?;
@@ -145,15 +219,22 @@ async fn update_code_video(
     }
 
     if new_status == code_video::CodeVideoStatus::Failed {
-        let cost = state.config.code_video_diamond_cost;
-        let existing_user = user::Entity::find_by_id(record.user_id)
-            .one(&tx)
-            .await?
-            .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
-        let mut active_user: user::ActiveModel = existing_user.into();
-        active_user.diamond = Set(active_user.diamond.unwrap() + cost);
-        active_user.updated_at = Set(Utc::now());
-        active_user.update(&tx).await?;
+        if let Some(owner_id) = resolve_code_video_owner(&tx, id).await? {
+            let cost = state.config.code_video_diamond_cost;
+            let existing_user = user::Entity::find_by_id(owner_id)
+                .one(&tx)
+                .await?
+                .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
+            let mut active_user: user::ActiveModel = existing_user.into();
+            active_user.diamond = Set(active_user.diamond.unwrap() + cost);
+            active_user.updated_at = Set(Utc::now());
+            active_user.update(&tx).await?;
+        } else {
+            tracing::warn!(
+                resource_id = id,
+                "code_video FAILED with no owner — skip refund"
+            );
+        }
     }
 
     active.update(&tx).await?;
@@ -217,15 +298,22 @@ async fn update_interactive_html(
     }
 
     if new_status == interactive_html::InteractiveHtmlStatus::Failed {
-        let cost = state.config.interactive_html_gold_cost;
-        let existing_user = user::Entity::find_by_id(record.user_id)
-            .one(&tx)
-            .await?
-            .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
-        let mut active_user: user::ActiveModel = existing_user.into();
-        active_user.gold = Set(active_user.gold.unwrap() + cost);
-        active_user.updated_at = Set(Utc::now());
-        active_user.update(&tx).await?;
+        if let Some(owner_id) = resolve_interactive_html_owner(&tx, id).await? {
+            let cost = state.config.interactive_html_gold_cost;
+            let existing_user = user::Entity::find_by_id(owner_id)
+                .one(&tx)
+                .await?
+                .ok_or_else(|| AppError::business(BusinessError::UserNotFound))?;
+            let mut active_user: user::ActiveModel = existing_user.into();
+            active_user.gold = Set(active_user.gold.unwrap() + cost);
+            active_user.updated_at = Set(Utc::now());
+            active_user.update(&tx).await?;
+        } else {
+            tracing::warn!(
+                resource_id = id,
+                "interactive_html FAILED with no owner — skip refund"
+            );
+        }
     }
 
     active.update(&tx).await?;

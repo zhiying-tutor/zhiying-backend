@@ -12,3 +12,6 @@ pub mod study_subject;
 pub mod study_task;
 pub mod user;
 pub mod user_checkin;
+pub mod user_code_video_link;
+pub mod user_interactive_html_link;
+pub mod user_knowledge_video_link;

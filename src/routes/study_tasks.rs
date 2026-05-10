@@ -242,7 +242,6 @@ pub async fn create_knowledge_video(
     active_user.update(&tx).await?;
 
     let kv_record = knowledge_video::ActiveModel {
-        user_id: Set(auth_user.user_id),
         status: Set(knowledge_video::KnowledgeVideoStatus::Queuing),
         prompt: Set(payload.prompt.clone()),
         object_key: Set(None),
@@ -328,7 +327,6 @@ pub async fn create_interactive_html(
     active_user.update(&tx).await?;
 
     let ih_record = interactive_html::ActiveModel {
-        user_id: Set(auth_user.user_id),
         status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
         prompt: Set(payload.prompt.clone()),
         object_key: Set(None),
@@ -569,4 +567,46 @@ pub async fn list_quizzes(
         .collect();
 
     Ok(ok(views))
+}
+
+/// GET /api/v1/study-tasks/{id}/knowledge-video
+pub async fn get_knowledge_video(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    Path(id): Path<i32>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    let (task, _, _) = load_owned_task(&state.db, id, auth_user.user_id).await?;
+    let kv_id = task
+        .knowledge_video_id
+        .ok_or_else(|| AppError::business(BusinessError::ContentNotFound))?;
+
+    let record = knowledge_video::Entity::find_by_id(kv_id)
+        .one(&state.db)
+        .await?
+        .ok_or_else(|| AppError::business(BusinessError::ContentNotFound))?;
+
+    Ok(ok(super::knowledge_videos::KnowledgeVideoView::from(
+        record,
+    )))
+}
+
+/// GET /api/v1/study-tasks/{id}/interactive-html
+pub async fn get_interactive_html(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    Path(id): Path<i32>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    let (task, _, _) = load_owned_task(&state.db, id, auth_user.user_id).await?;
+    let ih_id = task
+        .interactive_html_id
+        .ok_or_else(|| AppError::business(BusinessError::ContentNotFound))?;
+
+    let record = interactive_html::Entity::find_by_id(ih_id)
+        .one(&state.db)
+        .await?
+        .ok_or_else(|| AppError::business(BusinessError::ContentNotFound))?;
+
+    Ok(ok(super::interactive_htmls::InteractiveHtmlView::from(
+        record,
+    )))
 }
