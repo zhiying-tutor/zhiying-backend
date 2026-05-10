@@ -4,7 +4,6 @@ pub mod interactive_html;
 pub mod knowledge_explanation;
 pub mod knowledge_video;
 pub mod pretest_problem;
-pub mod problem;
 pub mod study_quiz;
 pub mod study_quiz_problem;
 pub mod study_stage;

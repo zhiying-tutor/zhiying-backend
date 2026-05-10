@@ -13,7 +13,7 @@ use validator::Validate;
 use crate::{
     auth::AuthUser,
     entities::{
-        common::ProblemAnswer, pretest_problem, problem, study_stage, study_subject,
+        common::ProblemAnswer, pretest_problem, study_stage, study_subject,
         study_subject::StudySubjectStatus, study_task, user,
     },
     error::{AppError, BusinessError},
@@ -63,15 +63,7 @@ impl From<study_subject::Model> for StudySubjectView {
 #[derive(Debug, Serialize)]
 pub struct PretestProblemView {
     pub id: i32,
-    pub problem: ProblemView,
     pub sort_order: i32,
-    pub confidence: Option<pretest_problem::PretestConfidence>,
-    pub chosen_answer: Option<ProblemAnswer>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ProblemView {
-    pub id: i32,
     pub content: String,
     pub choice_a: String,
     pub choice_b: String,
@@ -79,7 +71,8 @@ pub struct ProblemView {
     pub choice_d: String,
     pub answer: ProblemAnswer,
     pub explanation: String,
-    pub bookmarked: bool,
+    pub confidence: Option<pretest_problem::PretestConfidence>,
+    pub chosen_answer: Option<ProblemAnswer>,
 }
 
 // ── Payloads ──
@@ -266,36 +259,20 @@ pub async fn get_pretest(
         .all(&state.db)
         .await?;
 
-    let problem_ids: Vec<i32> = pretest_problems.iter().map(|pp| pp.problem_id).collect();
-    let problems = problem::Entity::find()
-        .filter(problem::Column::Id.is_in(problem_ids))
-        .all(&state.db)
-        .await?;
-
-    let problem_map: std::collections::HashMap<i32, problem::Model> =
-        problems.into_iter().map(|p| (p.id, p)).collect();
-
     let views: Vec<PretestProblemView> = pretest_problems
         .into_iter()
-        .filter_map(|pp| {
-            let p = problem_map.get(&pp.problem_id)?;
-            Some(PretestProblemView {
-                id: pp.id,
-                problem: ProblemView {
-                    id: p.id,
-                    content: p.content.clone(),
-                    choice_a: p.choice_a.clone(),
-                    choice_b: p.choice_b.clone(),
-                    choice_c: p.choice_c.clone(),
-                    choice_d: p.choice_d.clone(),
-                    answer: p.answer,
-                    explanation: p.explanation.clone(),
-                    bookmarked: p.bookmarked,
-                },
-                sort_order: pp.sort_order,
-                confidence: pp.confidence,
-                chosen_answer: pp.chosen_answer,
-            })
+        .map(|pp| PretestProblemView {
+            id: pp.id,
+            sort_order: pp.sort_order,
+            content: pp.content,
+            choice_a: pp.choice_a,
+            choice_b: pp.choice_b,
+            choice_c: pp.choice_c,
+            choice_d: pp.choice_d,
+            answer: pp.answer,
+            explanation: pp.explanation,
+            confidence: pp.confidence,
+            chosen_answer: pp.chosen_answer,
         })
         .collect();
 
@@ -422,29 +399,18 @@ pub async fn create_plan(
         .all(&tx)
         .await?;
 
-    let problem_ids: Vec<i32> = pretest_problems.iter().map(|pp| pp.problem_id).collect();
-    let problems = problem::Entity::find()
-        .filter(problem::Column::Id.is_in(problem_ids))
-        .all(&tx)
-        .await?;
-    let problem_map: std::collections::HashMap<i32, problem::Model> =
-        problems.into_iter().map(|p| (p.id, p)).collect();
-
     let pretest_results: Vec<PretestResult> = pretest_problems
         .iter()
-        .filter_map(|pp| {
-            let p = problem_map.get(&pp.problem_id)?;
-            Some(PretestResult {
-                problem_id: p.id,
-                content: p.content.clone(),
-                choice_a: p.choice_a.clone(),
-                choice_b: p.choice_b.clone(),
-                choice_c: p.choice_c.clone(),
-                choice_d: p.choice_d.clone(),
-                answer: format!("{:?}", p.answer),
-                chosen_answer: pp.chosen_answer.map(|a| format!("{:?}", a)),
-                confidence: pp.confidence.map(|c| format!("{:?}", c)),
-            })
+        .map(|pp| PretestResult {
+            problem_id: pp.id,
+            content: pp.content.clone(),
+            choice_a: pp.choice_a.clone(),
+            choice_b: pp.choice_b.clone(),
+            choice_c: pp.choice_c.clone(),
+            choice_d: pp.choice_d.clone(),
+            answer: format!("{:?}", pp.answer),
+            chosen_answer: pp.chosen_answer.map(|a| format!("{:?}", a)),
+            confidence: pp.confidence.map(|c| format!("{:?}", c)),
         })
         .collect();
 

@@ -14,7 +14,7 @@ use crate::{
     auth::{ServiceAuth, ServiceKind},
     entities::{
         code_video, common::ProblemAnswer, interactive_html, knowledge_explanation,
-        knowledge_video, pretest_problem, problem, study_quiz, study_quiz::StudyQuizStatus,
+        knowledge_video, pretest_problem, study_quiz, study_quiz::StudyQuizStatus,
         study_quiz_problem, study_stage, study_stage::StudyStageStatus, study_subject,
         study_subject::StudySubjectStatus, study_task, study_task::StudyTaskStatus, user,
         user_code_video_link, user_interactive_html_link, user_knowledge_video_link,
@@ -529,8 +529,9 @@ async fn callback_study_subject(
 
         for (i, p) in problems.into_iter().enumerate() {
             let answer = parse_problem_answer(&p.answer)?;
-            let problem_record = problem::ActiveModel {
-                user_id: Set(subject.user_id),
+            pretest_problem::ActiveModel {
+                study_subject_id: Set(subject.id),
+                sort_order: Set(i as i32),
                 content: Set(p.content),
                 choice_a: Set(p.choice_a),
                 choice_b: Set(p.choice_b),
@@ -538,17 +539,6 @@ async fn callback_study_subject(
                 choice_d: Set(p.choice_d),
                 answer: Set(answer),
                 explanation: Set(p.explanation),
-                bookmarked: Set(false),
-                created_at: Set(now),
-                ..Default::default()
-            }
-            .insert(&tx)
-            .await?;
-
-            pretest_problem::ActiveModel {
-                study_subject_id: Set(subject.id),
-                problem_id: Set(problem_record.id),
-                sort_order: Set(i as i32),
                 confidence: Set(None),
                 chosen_answer: Set(None),
                 created_at: Set(now),
@@ -760,27 +750,14 @@ async fn callback_study_quiz(
             .problems
             .ok_or_else(|| AppError::internal("quiz FINISHED callback missing problems data"))?;
 
-        // Find user_id through the join chain
-        let task = study_task::Entity::find_by_id(quiz.study_task_id)
-            .one(&tx)
-            .await?
-            .ok_or_else(|| AppError::business(BusinessError::TaskNotFound))?;
-        let stage = study_stage::Entity::find_by_id(task.study_stage_id)
-            .one(&tx)
-            .await?
-            .ok_or_else(|| AppError::business(BusinessError::StageNotFound))?;
-        let subject = study_subject::Entity::find_by_id(stage.study_subject_id)
-            .one(&tx)
-            .await?
-            .ok_or_else(|| AppError::business(BusinessError::StudySubjectNotFound))?;
-
         let total = problems.len() as i32;
         active.total_problems = Set(total);
 
         for (i, p) in problems.into_iter().enumerate() {
             let answer = parse_problem_answer(&p.answer)?;
-            let problem_record = problem::ActiveModel {
-                user_id: Set(subject.user_id),
+            study_quiz_problem::ActiveModel {
+                study_quiz_id: Set(quiz.id),
+                sort_order: Set(i as i32),
                 content: Set(p.content),
                 choice_a: Set(p.choice_a),
                 choice_b: Set(p.choice_b),
@@ -788,18 +765,9 @@ async fn callback_study_quiz(
                 choice_d: Set(p.choice_d),
                 answer: Set(answer),
                 explanation: Set(p.explanation),
-                bookmarked: Set(false),
-                created_at: Set(now),
-                ..Default::default()
-            }
-            .insert(&tx)
-            .await?;
-
-            study_quiz_problem::ActiveModel {
-                study_quiz_id: Set(quiz.id),
-                problem_id: Set(problem_record.id),
-                sort_order: Set(i as i32),
                 chosen_answer: Set(None),
+                bookmarked: Set(false),
+                mistake_hidden: Set(false),
                 created_at: Set(now),
                 ..Default::default()
             }

@@ -25,8 +25,16 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub study_subject_id: i32,
-    pub problem_id: i32,
     pub sort_order: i32,
+    #[sea_orm(column_type = "Text")]
+    pub content: String,
+    pub choice_a: String,
+    pub choice_b: String,
+    pub choice_c: String,
+    pub choice_d: String,
+    pub answer: ProblemAnswer,
+    #[sea_orm(column_type = "Text")]
+    pub explanation: String,
     pub confidence: Option<PretestConfidence>,
     pub chosen_answer: Option<ProblemAnswer>,
     pub created_at: DateTimeUtc,
@@ -40,23 +48,11 @@ pub enum Relation {
         to = "super::study_subject::Column::Id"
     )]
     StudySubject,
-    #[sea_orm(
-        belongs_to = "super::problem::Entity",
-        from = "Column::ProblemId",
-        to = "super::problem::Column::Id"
-    )]
-    Problem,
 }
 
 impl Related<super::study_subject::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::StudySubject.def()
-    }
-}
-
-impl Related<super::problem::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Problem.def()
     }
 }
 

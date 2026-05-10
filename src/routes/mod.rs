@@ -6,8 +6,8 @@ mod knowledge_explanations;
 mod knowledge_videos;
 mod me;
 mod placeholders;
-mod problems;
 mod public_config;
+mod quiz_problems;
 mod study_quizzes;
 mod study_stages;
 mod study_subjects;
@@ -60,6 +60,8 @@ fn api_router() -> Router<AppState> {
         .route("/tokens", axum::routing::post(tokens::create_token))
         .route("/me", get(me::get_me).patch(me::update_me))
         .route("/me/username", axum::routing::patch(me::update_username))
+        .route("/me/mistakes", get(me::list_mistakes))
+        .route("/me/bookmarks", get(me::list_bookmarks))
         .route(
             "/checkins",
             axum::routing::post(checkins::check_in).get(checkins::list_checkins),
@@ -154,11 +156,14 @@ fn api_router() -> Router<AppState> {
             "/study-quizzes/{id}/submit",
             axum::routing::post(study_quizzes::submit),
         )
-        // Problems
-        .route("/problems", get(problems::list))
+        // Quiz problems (mistake/bookmark toggles)
         .route(
-            "/problems/{id}/bookmark",
-            axum::routing::patch(problems::toggle_bookmark),
+            "/quiz-problems/{id}/bookmark",
+            axum::routing::patch(quiz_problems::toggle_bookmark),
+        )
+        .route(
+            "/quiz-problems/{id}/mistake-visibility",
+            axum::routing::patch(quiz_problems::toggle_mistake_visibility),
         )
         .merge(placeholders::router())
 }

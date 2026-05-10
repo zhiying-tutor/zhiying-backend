@@ -23,8 +23,8 @@ use zhiying_backend::{
     config::Config,
     entities::{
         code_video, common::ProblemAnswer, interactive_html, knowledge_explanation,
-        knowledge_video, problem, study_quiz, study_quiz_problem, study_stage, study_subject,
-        study_task, user,
+        knowledge_video, study_quiz, study_quiz_problem, study_stage, study_subject, study_task,
+        user,
     },
     services::message_queue::{InMemoryPublisher, PublishedMessage},
 };
@@ -338,8 +338,9 @@ impl TestApp {
 
         let mut ids = Vec::new();
         for (i, (content, answer)) in problems_data.iter().enumerate() {
-            let p = problem::ActiveModel {
-                user_id: Set(user_id),
+            let sqp = study_quiz_problem::ActiveModel {
+                study_quiz_id: Set(quiz.id),
+                sort_order: Set(i as i32),
                 content: Set(content.to_string()),
                 choice_a: Set("A".to_owned()),
                 choice_b: Set("B".to_owned()),
@@ -347,19 +348,9 @@ impl TestApp {
                 choice_d: Set("D".to_owned()),
                 answer: Set(*answer),
                 explanation: Set("explanation".to_owned()),
-                bookmarked: Set(false),
-                created_at: Set(now),
-                ..Default::default()
-            }
-            .insert(&db)
-            .await
-            .expect("insert problem");
-
-            let sqp = study_quiz_problem::ActiveModel {
-                study_quiz_id: Set(quiz.id),
-                problem_id: Set(p.id),
-                sort_order: Set(i as i32),
                 chosen_answer: Set(None),
+                bookmarked: Set(false),
+                mistake_hidden: Set(false),
                 created_at: Set(now),
                 ..Default::default()
             }
@@ -367,9 +358,10 @@ impl TestApp {
             .await
             .expect("insert study_quiz_problem");
 
-            ids.push((sqp.id, p.id));
+            ids.push((sqp.id, sqp.id));
         }
 
+        let _ = user_id;
         (quiz.id, ids)
     }
 

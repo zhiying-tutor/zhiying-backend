@@ -2,7 +2,7 @@ use sea_orm::Schema;
 use sea_orm_migration::prelude::*;
 
 use crate::entities::{
-    code_video, interactive_html, knowledge_explanation, knowledge_video, pretest_problem, problem,
+    code_video, interactive_html, knowledge_explanation, knowledge_video, pretest_problem,
     study_quiz, study_quiz_problem, study_stage, study_subject, study_task, user, user_checkin,
     user_code_video_link, user_interactive_html_link, user_knowledge_video_link,
 };
@@ -54,10 +54,6 @@ impl MigrationTrait for Migration {
         let mut study_subject_table = schema.create_table_from_entity(study_subject::Entity);
         study_subject_table.if_not_exists();
         manager.create_table(study_subject_table).await?;
-
-        let mut problem_table = schema.create_table_from_entity(problem::Entity);
-        problem_table.if_not_exists();
-        manager.create_table(problem_table).await?;
 
         let mut pretest_problem_table = schema.create_table_from_entity(pretest_problem::Entity);
         pretest_problem_table.if_not_exists();
@@ -145,7 +141,6 @@ impl MigrationTrait for Migration {
             "study_task",
             "study_stage",
             "pretest_problem",
-            "problem",
             "study_subject",
             "knowledge_explanation",
             "interactive_html",

@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     auth::AuthUser,
     entities::{
-        common::ProblemAnswer, problem, study_quiz, study_quiz::StudyQuizStatus,
-        study_quiz_problem, study_stage, study_subject, study_task,
+        common::ProblemAnswer, study_quiz, study_quiz::StudyQuizStatus, study_quiz_problem,
+        study_stage, study_subject, study_task,
     },
     error::{AppError, BusinessError},
     response::ok,
@@ -36,14 +36,7 @@ pub struct StudyQuizDetailView {
 #[derive(Debug, Serialize)]
 pub struct StudyQuizProblemView {
     pub id: i32,
-    pub problem: QuizProblemDetail,
     pub sort_order: i32,
-    pub chosen_answer: Option<ProblemAnswer>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct QuizProblemDetail {
-    pub id: i32,
     pub content: String,
     pub choice_a: String,
     pub choice_b: String,
@@ -51,7 +44,9 @@ pub struct QuizProblemDetail {
     pub choice_d: String,
     pub answer: ProblemAnswer,
     pub explanation: String,
+    pub chosen_answer: Option<ProblemAnswer>,
     pub bookmarked: bool,
+    pub mistake_hidden: bool,
 }
 
 // ── Payloads ──
@@ -109,34 +104,21 @@ pub async fn get_by_id(
         .all(&state.db)
         .await?;
 
-    let problem_ids: Vec<i32> = quiz_problems.iter().map(|qp| qp.problem_id).collect();
-    let problems = problem::Entity::find()
-        .filter(problem::Column::Id.is_in(problem_ids))
-        .all(&state.db)
-        .await?;
-    let problem_map: std::collections::HashMap<i32, problem::Model> =
-        problems.into_iter().map(|p| (p.id, p)).collect();
-
     let problem_views: Vec<StudyQuizProblemView> = quiz_problems
         .into_iter()
-        .filter_map(|qp| {
-            let p = problem_map.get(&qp.problem_id)?;
-            Some(StudyQuizProblemView {
-                id: qp.id,
-                problem: QuizProblemDetail {
-                    id: p.id,
-                    content: p.content.clone(),
-                    choice_a: p.choice_a.clone(),
-                    choice_b: p.choice_b.clone(),
-                    choice_c: p.choice_c.clone(),
-                    choice_d: p.choice_d.clone(),
-                    answer: p.answer,
-                    explanation: p.explanation.clone(),
-                    bookmarked: p.bookmarked,
-                },
-                sort_order: qp.sort_order,
-                chosen_answer: qp.chosen_answer,
-            })
+        .map(|qp| StudyQuizProblemView {
+            id: qp.id,
+            sort_order: qp.sort_order,
+            content: qp.content,
+            choice_a: qp.choice_a,
+            choice_b: qp.choice_b,
+            choice_c: qp.choice_c,
+            choice_d: qp.choice_d,
+            answer: qp.answer,
+            explanation: qp.explanation,
+            chosen_answer: qp.chosen_answer,
+            bookmarked: qp.bookmarked,
+            mistake_hidden: qp.mistake_hidden,
         })
         .collect();
 
@@ -201,24 +183,9 @@ pub async fn submit(
         return Err(AppError::business(BusinessError::IncompleteQuizAnswers));
     }
 
-    // Load problems to compute correct count
-    let problem_ids: Vec<i32> = quiz_problems.iter().map(|qp| qp.problem_id).collect();
-    let problems = problem::Entity::find()
-        .filter(problem::Column::Id.is_in(problem_ids))
-        .all(&tx)
-        .await?;
-    let problem_map: std::collections::HashMap<i32, problem::Model> =
-        problems.into_iter().map(|p| (p.id, p)).collect();
-
     let correct_count = quiz_problems
         .iter()
-        .filter(|qp| {
-            if let (Some(chosen), Some(p)) = (qp.chosen_answer, problem_map.get(&qp.problem_id)) {
-                chosen == p.answer
-            } else {
-                false
-            }
-        })
+        .filter(|qp| qp.chosen_answer.map(|c| c == qp.answer).unwrap_or(false))
         .count() as i32;
 
     let mut active: study_quiz::ActiveModel = quiz.into();

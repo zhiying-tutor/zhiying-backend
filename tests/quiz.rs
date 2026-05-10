@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde_json::json;
-use zhiying_backend::entities::{common::ProblemAnswer, problem, study_quiz, study_quiz_problem};
+use zhiying_backend::entities::{common::ProblemAnswer, study_quiz, study_quiz_problem};
 
 use common::TestApp;
 
@@ -238,8 +238,9 @@ async fn study_quiz_answer_non_ready_returns_400() {
     .await
     .expect("insert");
 
-    let p = problem::ActiveModel {
-        user_id: Set(1),
+    let sqp = study_quiz_problem::ActiveModel {
+        study_quiz_id: Set(quiz.id),
+        sort_order: Set(0),
         content: Set("Q1".to_owned()),
         choice_a: Set("A".to_owned()),
         choice_b: Set("B".to_owned()),
@@ -247,19 +248,9 @@ async fn study_quiz_answer_non_ready_returns_400() {
         choice_d: Set("D".to_owned()),
         answer: Set(ProblemAnswer::A),
         explanation: Set("E".to_owned()),
-        bookmarked: Set(false),
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
-
-    let sqp = study_quiz_problem::ActiveModel {
-        study_quiz_id: Set(quiz.id),
-        problem_id: Set(p.id),
-        sort_order: Set(0),
         chosen_answer: Set(None),
+        bookmarked: Set(false),
+        mistake_hidden: Set(false),
         created_at: Set(now),
         ..Default::default()
     }

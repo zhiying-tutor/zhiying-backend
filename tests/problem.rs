@@ -1,212 +1,123 @@
 mod common;
 
 use axum::http::StatusCode;
-use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set};
-use zhiying_backend::entities::{common::ProblemAnswer, pretest_problem, problem, study_subject};
+use serde_json::json;
+use zhiying_backend::entities::common::ProblemAnswer;
 
 use common::TestApp;
 
 #[tokio::test]
-async fn problems_list_returns_user_problems() {
+async fn me_mistakes_lists_only_wrong_answers() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    for i in 0..3 {
-        problem::ActiveModel {
-            user_id: Set(1),
-            content: Set(format!("Problem {}", i)),
-            choice_a: Set("A".to_owned()),
-            choice_b: Set("B".to_owned()),
-            choice_c: Set("C".to_owned()),
-            choice_d: Set("D".to_owned()),
-            answer: Set(ProblemAnswer::A),
-            explanation: Set("E".to_owned()),
-            bookmarked: Set(false),
-            created_at: Set(now),
-            ..Default::default()
-        }
-        .insert(&db)
-        .await
-        .expect("insert");
+    let (quiz_id, sqp_ids) = app
+        .insert_quiz_with_problems(
+            1,
+            task_ids[0][0],
+            &[
+                ("Q1", ProblemAnswer::A),
+                ("Q2", ProblemAnswer::B),
+                ("Q3", ProblemAnswer::C),
+            ],
+            0,
+        )
+        .await;
+
+    // Q1 correct (A), Q2 wrong (A vs B), Q3 not answered
+    for (sqp_id, chosen) in [(sqp_ids[0].0, "A"), (sqp_ids[1].0, "A")] {
+        app.request(
+            "PATCH",
+            &format!("/api/v1/study-quizzes/{quiz_id}/problems/{sqp_id}"),
+            Some(&token),
+            Some(json!({ "chosen_answer": chosen })),
+        )
+        .await;
     }
 
     let (status, body) = app
-        .request("GET", "/api/v1/problems", Some(&token), None)
+        .request("GET", "/api/v1/me/mistakes", Some(&token), None)
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["data"].as_array().map(Vec::len), Some(3));
+    let arr = body["data"].as_array().expect("array");
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["content"], "Q2");
+    assert_eq!(arr[0]["source"]["quiz_id"], quiz_id);
 }
 
 #[tokio::test]
-async fn problems_list_bookmarked_filter() {
+async fn me_mistakes_hides_when_marked_unless_include_hidden() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    // 1 bookmarked, 2 not
-    for i in 0..3 {
-        problem::ActiveModel {
-            user_id: Set(1),
-            content: Set(format!("Problem {}", i)),
-            choice_a: Set("A".to_owned()),
-            choice_b: Set("B".to_owned()),
-            choice_c: Set("C".to_owned()),
-            choice_d: Set("D".to_owned()),
-            answer: Set(ProblemAnswer::A),
-            explanation: Set("E".to_owned()),
-            bookmarked: Set(i == 0),
-            created_at: Set(now),
-            ..Default::default()
-        }
-        .insert(&db)
-        .await
-        .expect("insert");
+    let (quiz_id, sqp_ids) = app
+        .insert_quiz_with_problems(
+            1,
+            task_ids[0][0],
+            &[("Q1", ProblemAnswer::A), ("Q2", ProblemAnswer::B)],
+            0,
+        )
+        .await;
+
+    // Both wrong
+    for sqp_id in [sqp_ids[0].0, sqp_ids[1].0] {
+        app.request(
+            "PATCH",
+            &format!("/api/v1/study-quizzes/{quiz_id}/problems/{sqp_id}"),
+            Some(&token),
+            Some(json!({ "chosen_answer": "D" })),
+        )
+        .await;
     }
 
-    let (status, body) = app
+    // Hide first
+    let (status, _) = app
         .request(
-            "GET",
-            "/api/v1/problems?bookmarked=true",
+            "PATCH",
+            &format!("/api/v1/quiz-problems/{}/mistake-visibility", sqp_ids[0].0),
             Some(&token),
             None,
         )
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["data"].as_array().map(Vec::len), Some(1));
-    assert_eq!(body["data"][0]["bookmarked"], true);
-}
 
-#[tokio::test]
-async fn problems_list_wrong_filter() {
-    let app = TestApp::new().await;
-    let token = app.create_user_and_login("alice", "password123").await;
-
-    let db = app.db().await;
-    let now = Utc::now();
-
-    // Problem 1: answer=A
-    let p1 = problem::ActiveModel {
-        user_id: Set(1),
-        content: Set("P1".to_owned()),
-        choice_a: Set("A".to_owned()),
-        choice_b: Set("B".to_owned()),
-        choice_c: Set("C".to_owned()),
-        choice_d: Set("D".to_owned()),
-        answer: Set(ProblemAnswer::A),
-        explanation: Set("E".to_owned()),
-        bookmarked: Set(false),
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
-
-    // Problem 2: answer=B
-    let p2 = problem::ActiveModel {
-        user_id: Set(1),
-        content: Set("P2".to_owned()),
-        choice_a: Set("A".to_owned()),
-        choice_b: Set("B".to_owned()),
-        choice_c: Set("C".to_owned()),
-        choice_d: Set("D".to_owned()),
-        answer: Set(ProblemAnswer::B),
-        explanation: Set("E".to_owned()),
-        bookmarked: Set(false),
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
-
-    // Create a study subject for pretest_problem
-    let subject = study_subject::ActiveModel {
-        user_id: Set(1),
-        subject: Set("Test".to_owned()),
-        status: Set(study_subject::StudySubjectStatus::PretestReady),
-        total_stages: Set(0),
-        finished_stages: Set(0),
-        diamond_cost: Set(0),
-        language: Set("PYTHON".to_owned()),
-        target: Set(String::new()),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
-
-    // Pretest problem: P1 answered correctly (A), P2 answered wrong (A instead of B)
-    pretest_problem::ActiveModel {
-        study_subject_id: Set(subject.id),
-        problem_id: Set(p1.id),
-        sort_order: Set(0),
-        confidence: Set(None),
-        chosen_answer: Set(Some(ProblemAnswer::A)), // correct
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
-
-    pretest_problem::ActiveModel {
-        study_subject_id: Set(subject.id),
-        problem_id: Set(p2.id),
-        sort_order: Set(1),
-        confidence: Set(None),
-        chosen_answer: Set(Some(ProblemAnswer::A)), // wrong (answer is B)
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
-
-    let (status, body) = app
-        .request("GET", "/api/v1/problems?wrong=true", Some(&token), None)
+    let (_, body) = app
+        .request("GET", "/api/v1/me/mistakes", Some(&token), None)
         .await;
-    assert_eq!(status, StatusCode::OK);
-    let wrong = body["data"].as_array().expect("array");
-    assert_eq!(wrong.len(), 1);
-    assert_eq!(wrong[0]["content"], "P2");
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+
+    let (_, body) = app
+        .request(
+            "GET",
+            "/api/v1/me/mistakes?include_hidden=true",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
 }
 
 #[tokio::test]
-async fn problems_toggle_bookmark() {
+async fn me_bookmarks_returns_only_bookmarked() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    let p = problem::ActiveModel {
-        user_id: Set(1),
-        content: Set("Q1".to_owned()),
-        choice_a: Set("A".to_owned()),
-        choice_b: Set("B".to_owned()),
-        choice_c: Set("C".to_owned()),
-        choice_d: Set("D".to_owned()),
-        answer: Set(ProblemAnswer::A),
-        explanation: Set("E".to_owned()),
-        bookmarked: Set(false),
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    let (_, sqp_ids) = app
+        .insert_quiz_with_problems(
+            1,
+            task_ids[0][0],
+            &[("Q1", ProblemAnswer::A), ("Q2", ProblemAnswer::B)],
+            0,
+        )
+        .await;
 
-    // Toggle on
     let (status, body) = app
         .request(
             "PATCH",
-            &format!("/api/v1/problems/{}/bookmark", p.id),
+            &format!("/api/v1/quiz-problems/{}/bookmark", sqp_ids[0].0),
             Some(&token),
             None,
         )
@@ -214,76 +125,44 @@ async fn problems_toggle_bookmark() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["bookmarked"], true);
 
-    // Toggle off
-    let (status, body) = app
-        .request(
-            "PATCH",
-            &format!("/api/v1/problems/{}/bookmark", p.id),
-            Some(&token),
-            None,
-        )
+    let (_, body) = app
+        .request("GET", "/api/v1/me/bookmarks", Some(&token), None)
         .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["data"]["bookmarked"], false);
+    let arr = body["data"].as_array().expect("array");
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["content"], "Q1");
 }
 
 #[tokio::test]
-async fn problems_bookmark_nonexistent_returns_404() {
-    let app = TestApp::new().await;
-    let token = app.create_user_and_login("alice", "password123").await;
-
-    let (status, body) = app
-        .request("PATCH", "/api/v1/problems/999/bookmark", Some(&token), None)
-        .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body["code"], "PROBLEM_NOT_FOUND");
-}
-
-#[tokio::test]
-async fn problems_bookmark_other_user_returns_404() {
+async fn quiz_problem_toggle_other_user_returns_404() {
     let app = TestApp::new().await;
     app.create_user_and_login("alice", "password123").await;
     let token_bob = app.create_user_and_login("bob", "password123").await;
 
-    let db = app.db().await;
-    let now = Utc::now();
-    let p = problem::ActiveModel {
-        user_id: Set(1), // alice
-        content: Set("Q1".to_owned()),
-        choice_a: Set("A".to_owned()),
-        choice_b: Set("B".to_owned()),
-        choice_c: Set("C".to_owned()),
-        choice_d: Set("D".to_owned()),
-        answer: Set(ProblemAnswer::A),
-        explanation: Set("E".to_owned()),
-        bookmarked: Set(false),
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert");
+    let (_, _, task_ids) = app.insert_study_subject_with_plan(1, 1, 1).await;
+    let (_, sqp_ids) = app
+        .insert_quiz_with_problems(1, task_ids[0][0], &[("Q1", ProblemAnswer::A)], 0)
+        .await;
 
-    // Bob tries to bookmark Alice's problem
     let (status, body) = app
         .request(
             "PATCH",
-            &format!("/api/v1/problems/{}/bookmark", p.id),
+            &format!("/api/v1/quiz-problems/{}/bookmark", sqp_ids[0].0),
             Some(&token_bob),
             None,
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body["code"], "PROBLEM_NOT_FOUND");
+    assert_eq!(body["code"], "STUDY_QUIZ_PROBLEM_NOT_FOUND");
 }
 
 #[tokio::test]
-async fn problems_list_empty_returns_empty_array() {
+async fn me_mistakes_empty_for_new_user() {
     let app = TestApp::new().await;
     let token = app.create_user_and_login("alice", "password123").await;
 
     let (status, body) = app
-        .request("GET", "/api/v1/problems", Some(&token), None)
+        .request("GET", "/api/v1/me/mistakes", Some(&token), None)
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"].as_array().map(Vec::len), Some(0));

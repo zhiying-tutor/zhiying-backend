@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde_json::json;
-use zhiying_backend::entities::{common::ProblemAnswer, pretest_problem, problem, study_subject};
+use zhiying_backend::entities::{common::ProblemAnswer, pretest_problem, study_subject};
 
 use common::TestApp;
 
@@ -735,8 +735,9 @@ async fn study_subject_plan_dispatch_payload_includes_pretest_results() {
     .await
     .expect("insert subject");
 
-    problem::ActiveModel {
-        user_id: Set(1),
+    pretest_problem::ActiveModel {
+        study_subject_id: Set(1),
+        sort_order: Set(0),
         content: Set("什么是所有权？".to_owned()),
         choice_a: Set("变量绑定规则".to_owned()),
         choice_b: Set("垃圾回收".to_owned()),
@@ -744,18 +745,6 @@ async fn study_subject_plan_dispatch_payload_includes_pretest_results() {
         choice_d: Set("网络协议".to_owned()),
         answer: Set(ProblemAnswer::A),
         explanation: Set("Rust 通过所有权管理内存".to_owned()),
-        bookmarked: Set(false),
-        created_at: Set(now),
-        ..Default::default()
-    }
-    .insert(&db)
-    .await
-    .expect("insert problem");
-
-    pretest_problem::ActiveModel {
-        study_subject_id: Set(1),
-        problem_id: Set(1),
-        sort_order: Set(0),
         confidence: Set(Some(pretest_problem::PretestConfidence::VerySure)),
         chosen_answer: Set(Some(ProblemAnswer::A)),
         created_at: Set(now),
