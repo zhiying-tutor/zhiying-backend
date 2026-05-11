@@ -71,9 +71,32 @@ pub struct StudyQuizBriefView {
 
 // ── Payloads ──
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
 pub struct PromptRequest {
-    pub prompt: String,
+    pub prompt: Option<String>,
+}
+
+fn task_default_prompt(task: &study_task::Model) -> String {
+    let title = task.title.trim();
+    let desc = task.description.trim();
+    if desc.is_empty() {
+        title.to_owned()
+    } else if title.is_empty() {
+        desc.to_owned()
+    } else {
+        format!("{title}\n\n{desc}")
+    }
+}
+
+fn resolve_prompt(payload: PromptRequest, task: &study_task::Model) -> String {
+    payload
+        .prompt
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| task_default_prompt(task))
 }
 
 // ── Helpers ──
@@ -227,6 +250,8 @@ pub async fn create_knowledge_video(
         return Err(AppError::business(BusinessError::InvalidStudyTaskStatus));
     }
 
+    let prompt = resolve_prompt(payload, &task);
+
     let existing_user = user::Entity::find_by_id(auth_user.user_id)
         .one(&tx)
         .await?
@@ -243,7 +268,7 @@ pub async fn create_knowledge_video(
 
     let kv_record = knowledge_video::ActiveModel {
         status: Set(knowledge_video::KnowledgeVideoStatus::Queuing),
-        prompt: Set(payload.prompt.clone()),
+        prompt: Set(prompt.clone()),
         object_key: Set(None),
         public: Set(false),
         created_at: Set(now),
@@ -262,7 +287,7 @@ pub async fn create_knowledge_video(
 
     let request = GenerateRequest {
         task_id: kv_record.id,
-        prompt: payload.prompt,
+        prompt: prompt.clone(),
     };
     if let Err(err) = dispatch_to_service(
         state.publisher.as_ref(),
@@ -312,6 +337,8 @@ pub async fn create_interactive_html(
         return Err(AppError::business(BusinessError::InvalidStudyTaskStatus));
     }
 
+    let prompt = resolve_prompt(payload, &task);
+
     let existing_user = user::Entity::find_by_id(auth_user.user_id)
         .one(&tx)
         .await?
@@ -328,7 +355,7 @@ pub async fn create_interactive_html(
 
     let ih_record = interactive_html::ActiveModel {
         status: Set(interactive_html::InteractiveHtmlStatus::Queuing),
-        prompt: Set(payload.prompt.clone()),
+        prompt: Set(prompt.clone()),
         object_key: Set(None),
         public: Set(false),
         created_at: Set(now),
@@ -347,7 +374,7 @@ pub async fn create_interactive_html(
 
     let request = GenerateRequest {
         task_id: ih_record.id,
-        prompt: payload.prompt,
+        prompt: prompt.clone(),
     };
     if let Err(err) = dispatch_to_service(
         state.publisher.as_ref(),
@@ -396,10 +423,12 @@ pub async fn create_explanation(
         return Err(AppError::business(BusinessError::InvalidStudyTaskStatus));
     }
 
+    let prompt = resolve_prompt(payload, &task);
+
     let ke_record = knowledge_explanation::ActiveModel {
         user_id: Set(auth_user.user_id),
         status: Set(knowledge_explanation::KnowledgeExplanationStatus::Queuing),
-        prompt: Set(payload.prompt.clone()),
+        prompt: Set(prompt.clone()),
         content: Set(None),
         public: Set(false),
         cost: Set(0),
@@ -419,7 +448,7 @@ pub async fn create_explanation(
 
     let request = GenerateRequest {
         task_id: ke_record.id,
-        prompt: payload.prompt,
+        prompt: prompt.clone(),
     };
     if let Err(err) = dispatch_to_service(
         state.publisher.as_ref(),
@@ -457,6 +486,8 @@ pub async fn create_quiz(
     if task.status == StudyTaskStatus::Locked {
         return Err(AppError::business(BusinessError::InvalidStudyTaskStatus));
     }
+
+    let prompt = resolve_prompt(payload, &task);
 
     // Count existing quizzes for this task
     let existing_count = study_quiz::Entity::find()
@@ -504,7 +535,7 @@ pub async fn create_quiz(
 
     let request = QuizRequest {
         task_id: quiz_record.id,
-        prompt: payload.prompt,
+        prompt,
     };
     if let Err(err) = dispatch_quiz(
         state.publisher.as_ref(),
