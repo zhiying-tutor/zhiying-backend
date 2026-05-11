@@ -1,128 +1,78 @@
 # PROGRESS.md
 
-最后更新：2026-04-27
+最后更新：2026-05-11
 
 ## 当前状态
 
-项目已完成用户/认证/签到核心链路、当前用户资料与用户名修改、4 种独立内容生成资源的异步任务架构、完整的学习主题模块、管理员充值接口，以及微服务 dispatch 由 HTTP 切换为 RabbitMQ。
-
-当前可通过 `cargo check`。`cargo test --test content --test study_subject --test quiz` 全绿（含 dispatch payload / 失败退款用例）。`cargo test --test profile` 仍有既有用例 `profile_get_returns_default_values` 期望注册后钻石为 0，但当前注册奖励配置为 80，需后续校准测试期望。
+核心学习闭环（学前测 → 计划 → 阶段/任务解锁 → 任务内容生成 → 小测 → 错题/收藏）已通；三大内容资源（K2V / C2V / Interactive HTML）已支持工具自由创建（list/get/delete via link 表）；微服务 dispatch 走 RabbitMQ + publisher confirm，callback 仍走 HTTP。
 
 ## 已完成
 
-- 搭建 `axum + tokio + sea-orm` 基础框架。
-- 配置 `sea-orm` 同时支持：
-  - `sqlite`
-  - `postgresql`
-  - `mysql`
-- 接入 `argon2` 密码哈希。
-- 实现统一错误模型：
-  - 业务错误使用枚举
-  - 校验错误统一返回 `VALIDATION_FAILED`
-  - 对外错误文案默认中文
-- 完成基础路由：
-  - `POST /api/v1/users`
-  - `POST /api/v1/tokens`
-  - `GET /api/v1/me`
-  - `PATCH /api/v1/me`
-  - `PATCH /api/v1/me/username`
-  - `POST /api/v1/checkins`
-  - `GET /api/v1/checkins`
-  - `GET /health`
-- 用户名修改已拆为独立接口，复用 `USERNAME_ALREADY_EXISTS` 错误码，并在数据库层为 `user.username` 增加唯一索引。
-- 注册奖励钻石已改为可配置项 `REGISTER_BONUS_DIAMONDS`，测试环境当前配置为 80。
-- 已接入 SeaORM migration，启动时会自动执行迁移。
-- 当前 migration 采用早期开发阶段的顺序编号风格，首个 migration 为 `m0001_init_schema.rs`。
-- 已补充基础 HTTP 级测试，覆盖认证、签到、内容生成回调等场景。
-- 集成测试已引入 `wiremock`，`TestApp` 会为每个测试实例启动独立 mock server，并将 7 个外部微服务 dispatch URL 指向该实例。
-- 已实现公开配置接口 `GET /api/v1/config`，用于返回前端需要感知的注册奖励和学习主题阶梯价格。
+### 基础设施
+- SeaORM migration 单文件 `m0001_init_schema.rs`，启动时直接 apply（早期阶段允许删库重建）。
+- 数据库兼容 `sqlite / postgresql / mysql`，本地默认 sqlite，联调默认 PostgreSQL（`zhiying-infra` 提供）。
+- 错误统一走 `src/error.rs`：业务错误中文化、校验错误归并为 `VALIDATION_FAILED`。
+- 鉴权：JWT（`AuthUser`） + 微服务 API Key（`ServiceAuth` / `ServiceKind`，`sk-` 前缀区分来源）。
+- CORS、TraceLayer、`/health`。
 
-### 内容生成模块
+### 用户体系
+- `POST /users` 注册（赠送 `REGISTER_BONUS_DIAMONDS`）。
+- `POST /tokens` 登录签发 JWT。
+- `GET /me`、`PATCH /me`、`PATCH /me/username`（用户名唯一约束 + 友好错误）。
+- `GET /me/mistakes`、`GET /me/bookmarks`：错题本与收藏聚合。
+- 签到：`POST /checkins`、`GET /checkins`，奖励序列由 `CHECKIN_REWARD_SEQUENCE` 配置；钻石/金币补签。
+- 管理员充值：`POST /internal/users/{id}/balance`（`ServiceKind::Recharge`）。
 
-- 实现 4 种独立内容生成资源：
-  - `knowledge_video`（知识点视频，扣钻石）
-  - `code_video`（代码讲解视频，扣钻石）
-  - `interactive_html`（交互式网页，扣金币）
-  - `knowledge_explanation`（知识点文字讲解 + 思维导图，扣金币）
-- 每种资源各自定义独立状态枚举，当前状态：QUEUING / GENERATING / FINISHED / FAILED
-- 用户端接口：
-  - `POST /api/v1/{resource}` — 创建生成任务（扣费 + 向微服务发请求 + 等待入队确认）
-  - `GET /api/v1/{resource}/{id}` — 查询任务状态（短轮询）
-  - `PATCH /api/v1/{resource}/{id}` — 设置公开 / 对 FAILED 任务重新生成
-- 微服务回调接口（internal，通过 API_KEY 鉴权）：
-  - `PATCH /api/v1/internal/{resource}/{id}` — 更新任务状态
-  - 状态流转校验：QUEUING→GENERATING, GENERATING→FINISHED/FAILED
-  - FAILED 时自动退款到用户账户
-- 新增 `ServiceAuth` 提取器：通过 `sk-` 前缀区分 API_KEY 和 JWT
-- 每种微服务各自独立的 URL、API_KEY、费用配置（环境变量）
-- `knowledge_explanation` 直接存储 `content`（文本）和 `mindmap`（JSON），不使用 url
-- 其余三种资源使用 `url` 字段（由微服务回调写入）
-- `knowledge_explanation` 新增 `cost` 字段区分付费（用户自主生成）和免费（学习任务下生成）
-- 已补充集成测试：回调状态更新、退款、非法状态流转、错误 API_KEY、用户 PATCH 等
-- 已补充 4 类内容生成创建接口的 dispatch 成功路径测试，覆盖扣费、QUEUING 落库、`/generate` 子路径和微服务 API Key header。
+### 学习主题
+- `study_subject` 8 状态状态机（PretestQueuing → PretestGenerating → PretestReady → PlanQueuing → PlanGenerating → Studying → Finished / Failed）。
+- 阶段 / 任务 3 状态（Locked / Studying / Finished），按 `sort_order` 强制顺序解锁。
+- 统计字段非规范化（`total_stages / finished_stages / total_tasks / finished_tasks`），状态变更时同步维护。
+- 接口：
+  - `POST /study-subjects` 创建（按 `total_stages → 钻石消耗`配置扣费）+ dispatch pretest。
+  - `GET /study-subjects`、`GET /study-subjects/{id}`、`GET /study-subjects/{id}/stages`（含 tasks）。
+  - `GET/PATCH /study-subjects/{id}/pretest[/problem_id]`：学前测做题。
+  - `POST /study-subjects/{id}/plan`：触发计划生成。
+  - `GET /study-stages/{id}`、`GET /study-tasks/{id}`、`POST /study-tasks/{id}/complete`。
+  - 任务派生内容：`POST/GET /study-tasks/{id}/knowledge-video|interactive-html`、`POST /study-tasks/{id}/explanation`。
+  - 小测：`POST /study-tasks/{id}/quizzes`、`GET /study-tasks/{id}/quizzes`、`GET /study-quizzes/{id}`、`PATCH /study-quizzes/{quiz_id}/problems/{study_quiz_problem_id}`、`POST /study-quizzes/{id}/submit`。
+  - 错题/收藏切换：`PATCH /quiz-problems/{id}/bookmark`、`PATCH /quiz-problems/{id}/mistake-visibility`。
+- 用户主动切换 active subject：`PATCH /me` 写 `active_study_subject_id`。
 
-### 学习主题模块
+### 内容生成（工具自由创建 + 任务派生双路径）
+- 三件套统一形态：`POST /<resource>`（扣费 + dispatch + INSERT link）、`GET /<resource>`（list via link）、`GET /<resource>/{id}`（鉴权走 link）、`DELETE /<resource>/{id}`（仅删 link，资源行保留）。
+  - `knowledge-videos`、`code-videos`、`interactive-htmls`。
+- `knowledge-explanations` 暂只支持任务派生，未提供自由创建。
+- ownership 拆分到 `user_<resource>_link` 三张 join 表；任务派生路径走 `study_task → study_stage → study_subject.user_id`。
+- 状态枚举统一大写：QUEUING / GENERATING / FINISHED / FAILED。FAILED 按记录 `cost` 字段统一退款，content/subject 双路径反查 owner。
 
-- 实现完整学习主题生命周期，新增 7 个实体：
-  - `study_subject`（8 个状态的状态机）
-  - `problem`（题目，归属用户，单选 A/B/C/D）
-  - `pretest_problem`（课前测关联表，含自信程度）
-  - `study_stage`（学习阶段，3 状态顺序解锁）
-  - `study_task`（学习任务，3 状态顺序解锁，持有 3 个可空内容外键）
-  - `study_quiz`（小测，5 状态，含免费额度限制）
-  - `study_quiz_problem`（小测题目关联表）
-- 课前测生成 → 用户逐题作答 → 学习计划结构生成 → 阶段/任务顺序解锁 → 任务内容按需生成 → 小测生成/作答/提交 → 题目收藏/错题查询
-- 3 个新增微服务 dispatch 函数（pretest / plan / quiz），POST 到根路径
-- 8×6 回调状态转换表（10 个合法转换，38 个拒绝）
-- 顺序解锁逻辑：完成任务 → 解锁下一个任务 → 阶段完成 → 解锁下一个阶段
-- 小测免费额度机制：每任务 N 次免费（可配置），超出扣金币
-- 所有权校验通过 JOIN 链追溯到 `study_subject.user_id`
-- 已补齐学习主题 dispatch 成功路径与协议测试：
-  - 创建学习主题可 mock pretest 成功并返回 201，验证 `total_stages=7` 扣 20 钻石且余额从 100 变为 80。
-  - pretest / plan / quiz dispatch 请求体覆盖 `task_id`、`prompt`、`total_stages`、`language`、`target`、`pretest_results` 等关键字段。
-  - dispatch 失败仍覆盖 503、退款与 FAILED 状态。
+### 微服务集成（RabbitMQ dispatch + HTTP callback）
+- 7 微服务（knowledge_video / code_video / interactive_html / knowledge_explanation / pretest / plan / quiz）独立 direct exchange `zhiying.{service}`，绑定 queue `zhiying.{service}.generate`，routing key `generate`。
+- 启动时 `declare_topology` 幂等声明，durable + `delivery_mode=2` + publisher confirm。nack/连接失败 → `BusinessError::ServiceUnavailable`，与同步路径一致退款。
+- 抽象 `MessagePublisher` trait：生产用 `LapinPublisher`（`deadpool_lapin` 池），测试用 `InMemoryPublisher`（支持 `fail_next`）。
+- callback：内容类用 `PATCH /internal/{resource}/{id}`，学习主题类用 `POST /internal/{resource}/{id}`。
 
-## 当前签到规则实现
+### 测试
+- 集成测试覆盖：认证、签到、学习主题完整链路、四类资源 dispatch + 回调 + 退款、quiz dispatch payload、管理员充值、wiremock + InMemoryPublisher 双轨。
 
-- 只保留 `POST /checkins`，不再提供单独的 `/checkins/makeup`。
-- 请求体支持 `makeup?: boolean`。
-- 若上次签到后发生断签，用户只能在本次签到时决定是否一次性补签。
-- 若选择补签：
-  - 会补上上次断签后的全部日期
-  - 会发放从断签前连续签到天数之后开始，到补签完成当天为止的全部签到奖励
-  - 金币成本按断签天数计算
-  - 钻石成本固定一次扣除
-  - 若金币或钻石不足，则本次签到失败，不自动降级为普通签到
-- 签到金币奖励使用可配置序列：
-  - 默认 `1,2,3,4,6,8,10`
-  - 超出序列长度后沿用最后一个值
-- 签到当前不发经验。
+## 进行中 / 未完成
 
-### 充值接口
+- **搜索**：所有 list 接口尚未支持 `q` 参数。计划加在 study-subject / knowledge-video / code-video / interactive-html / mistake-list。
+- **用户中心**：改密、删号、消费明细、活跃 session 列表均未做。
+- **资源分享**：`public` 字段已存在但无切换入口、无公开浏览端点。
+- **钻石商店 / 充值入口**：仅有内部充值接口，缺面向用户的购买流程。
+- **任务派生资源加入工具画廊**：双路径目前完全隔离，未做反向 link。
+- **mistake 详情聚合接口**：当前仅列表，详情走 quiz_problem 路径。
+- **占位路由 `placeholders::router()`**：见 `src/routes/placeholders.rs`，待替换。
+- **profile 测试期望**：`profile_get_returns_default_values` 仍按旧注册奖励 0 钻石断言，需校准为 `REGISTER_BONUS_DIAMONDS`（当前 80）。
 
-- 实现管理员充值接口 `POST /internal/users/{id}/balance`，通过 API_KEY 鉴权（`ServiceKind::Recharge`）。
-- 支持同时增减金币和钻石，正数增加、负数扣减，扣减后余额不能为负。
-- 新增环境变量 `RECHARGE_API_KEY`（默认 `sk-recharge-dev`）。
-- 已补充 10 个集成测试覆盖：正常充值、仅充金币、扣减、余额不足、用户不存在、空请求体、错误 API_KEY、其他服务 Key 被拒、多次累积。
+## 临时决策
 
-### RabbitMQ 微服务 dispatch
-
-- 7 个微服务（knowledge_video / code_video / interactive_html / knowledge_explanation / pretest / plan / quiz）的 dispatch 已由 HTTP 同步调用改为 RabbitMQ publisher confirm。
-- 拓扑：每微服务一个 direct exchange `zhiying.{service}`，绑定一个 queue `zhiying.{service}.generate`，routing key 为 `generate`，启动时由 `declare_topology` 幂等创建。
-- 抽象 `MessagePublisher` trait：生产用 `LapinPublisher`（`deadpool_lapin` 连接池 + publisher confirm），测试用 `InMemoryPublisher`（记录已发布消息、支持 `fail_next`）；`build_app_with_publisher` 暴露注入入口。
-- 配置变更：删除 7 个 `*_SERVICE_URL`，新增 `RABBITMQ_URL` 与 7 个 `*_EXCHANGE`；`*_API_KEY` 全部保留（callback 方向 `ServiceAuth` 仍需要）。
-- 测试改造：`TestApp` 注入 `InMemoryPublisher`，原 wiremock dispatch 校验改为 `app.published_json(exchange)` 断言；dispatch 失败用例改用 `app.fail_next_publish()`。
-- 本地依赖 RabbitMQ 由独立仓库 `zhiying-infra` 的 docker compose 提供。
-
-## 尚未完成
-
-- 聚合查询接口（`my-contents`、`public-contents`）
-- 校准注册奖励变更后的 profile 默认值测试期望。
-- 更多业务表结构与后续 schema 演进
-- 与 zhiying-infra 协调下游 consumer 的 exchange/queue 命名与消息 schema 对齐。
+- migration 单文件 + 删库重建，等需要兼容旧库再切到追加。
+- 任务派生与工具自由创建共用 resource 表，但 ownership 完全分离，避免后续画廊混杂。
+- callback FAILED 退款 owner 反查走 link 优先，task 次之；都查不到时跳过退款 + warn 日志（理论上不可能）。
 
 ## 下一步建议
 
-1. 实现 `my-contents` 和 `public-contents` 聚合查询。
-2. 修正 `profile_get_returns_default_values` 中注册奖励钻石的断言，使 profile 测试重新整体通过。
-3. 在新增业务资源时同步补对应 migration；在仍可删库重建的阶段内，优先维护初始化 migration 的清晰度。
+1. 给 list 接口加 `q` 参数，前端 Dashboard 搜索栏点亮的前置依赖。
+2. `placeholders` 中的占位路由按需替换为正式实现。
+3. 校准 `profile_get_returns_default_values` 测试。
