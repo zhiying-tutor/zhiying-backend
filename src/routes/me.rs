@@ -178,6 +178,8 @@ pub struct QuizProblemSource {
 pub struct MistakesQuery {
     #[serde(default)]
     pub include_hidden: Option<bool>,
+    #[serde(default)]
+    pub q: Option<String>,
 }
 
 /// GET /api/v1/me/mistakes
@@ -187,14 +189,14 @@ pub async fn list_mistakes(
     Query(query): Query<MistakesQuery>,
 ) -> Result<impl axum::response::IntoResponse, AppError> {
     let include_hidden = query.include_hidden.unwrap_or(false);
+    let q = query
+        .q
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
 
-    let rows: Vec<(
-        study_quiz_problem::Model,
-        Option<study_quiz::Model>,
-        Option<study_task::Model>,
-        Option<study_stage::Model>,
-        Option<study_subject::Model>,
-    )> = study_quiz_problem::Entity::find()
+    let mut select = study_quiz_problem::Entity::find()
         .find_also_related(study_quiz::Entity)
         .join(JoinType::InnerJoin, study_quiz::Relation::StudyTask.def())
         .join(JoinType::InnerJoin, study_task::Relation::StudyStage.def())
@@ -202,7 +204,19 @@ pub async fn list_mistakes(
             JoinType::InnerJoin,
             study_stage::Relation::StudySubject.def(),
         )
-        .filter(study_subject::Column::UserId.eq(auth_user.user_id))
+        .filter(study_subject::Column::UserId.eq(auth_user.user_id));
+
+    if let Some(ref q) = q {
+        select = select.filter(study_quiz_problem::Column::Content.contains(q));
+    }
+
+    let rows: Vec<(
+        study_quiz_problem::Model,
+        Option<study_quiz::Model>,
+        Option<study_task::Model>,
+        Option<study_stage::Model>,
+        Option<study_subject::Model>,
+    )> = select
         .all(&state.db)
         .await?
         .into_iter()

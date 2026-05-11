@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use chrono::Utc;
 use sea_orm::{
@@ -212,15 +212,26 @@ pub async fn create(
 }
 
 /// GET /api/v1/study-subjects
+#[derive(Debug, Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    pub q: Option<String>,
+}
+
 pub async fn list(
     State(state): State<AppState>,
     auth_user: AuthUser,
+    Query(query): Query<ListQuery>,
 ) -> Result<impl axum::response::IntoResponse, AppError> {
-    let records = study_subject::Entity::find()
+    let mut select = study_subject::Entity::find()
         .filter(study_subject::Column::UserId.eq(auth_user.user_id))
-        .order_by_desc(study_subject::Column::CreatedAt)
-        .all(&state.db)
-        .await?;
+        .order_by_desc(study_subject::Column::CreatedAt);
+
+    if let Some(q) = query.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        select = select.filter(study_subject::Column::Subject.contains(q));
+    }
+
+    let records = select.all(&state.db).await?;
 
     let views: Vec<StudySubjectView> = records.into_iter().map(StudySubjectView::from).collect();
     Ok(ok(views))

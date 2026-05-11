@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use chrono::Utc;
 use sea_orm::{
@@ -128,16 +128,27 @@ pub async fn create(
     Ok(created(InteractiveHtmlView::from(record)))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    pub q: Option<String>,
+}
+
 pub async fn list(
     State(state): State<AppState>,
     auth_user: AuthUser,
+    Query(query): Query<ListQuery>,
 ) -> Result<impl axum::response::IntoResponse, AppError> {
-    let pairs = user_interactive_html_link::Entity::find()
+    let mut select = user_interactive_html_link::Entity::find()
         .filter(user_interactive_html_link::Column::UserId.eq(auth_user.user_id))
         .order_by_desc(user_interactive_html_link::Column::CreatedAt)
-        .find_also_related(interactive_html::Entity)
-        .all(&state.db)
-        .await?;
+        .find_also_related(interactive_html::Entity);
+
+    if let Some(q) = query.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        select = select.filter(interactive_html::Column::Prompt.contains(q));
+    }
+
+    let pairs = select.all(&state.db).await?;
 
     let views: Vec<InteractiveHtmlView> = pairs
         .into_iter()
