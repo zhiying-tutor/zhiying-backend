@@ -8,6 +8,14 @@ pub struct PublicConfig {
     study_subject: StudySubjectConfig,
     storage: StorageConfig,
     resource: ResourceConfig,
+    checkin: CheckinConfig,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CheckinConfig {
+    reward_sequence: Vec<i32>,
+    makeup_gold_cost_per_day: i32,
+    makeup_diamond_cost: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +66,11 @@ fn build_public_config(config: &Config) -> PublicConfig {
             interactive_html_gold_cost: config.interactive_html_gold_cost,
             study_quiz_free_limit_per_task: config.study_quiz_free_limit_per_task,
             study_quiz_extra_gold_cost: config.study_quiz_extra_gold_cost,
+        },
+        checkin: CheckinConfig {
+            reward_sequence: config.checkin_reward_sequence.clone(),
+            makeup_gold_cost_per_day: config.checkin_makeup_gold_cost_per_day,
+            makeup_diamond_cost: config.checkin_makeup_diamond_cost,
         },
     }
 }
