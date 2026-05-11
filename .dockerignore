@@ -1,0 +1,16 @@
+target
+.git
+.gitignore
+.env
+.env.*
+*.db
+docs
+tests
+README.md
+PROGRESS.md
+AGENTS.md
+CLAUDE.md
+justfile
+skills-lock.json
+Dockerfile
+.dockerignore
